@@ -1,0 +1,25 @@
+{
+    "name": "tinyemu",
+    "version": "1.0.0",
+    "keywords": "TinyEMU",
+    "description": "TinyEMU is a system emulator for RISC-V",
+    "build": {
+        "srcFilter":[
+            "+<*>",
+            "-<build_filelist.c>",
+            "-<fs_disk.c>",
+            "-<fs_wget.c>",
+            "-<fs_net.c>",
+            "-<jsemu.c>",
+            "-<riscv_cpu.c>",
+            "-<block_net.c>",
+            "-<sdl.c>",
+            "-<slirp>"
+        ]
+    },
+    "license":"MIT",
+    "frameworks": "*",
+    "dependencies":[
+        
+    ]
+}

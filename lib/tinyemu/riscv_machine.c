@@ -79,6 +79,23 @@ typedef struct RISCVMachine {
 #define RTC_FREQ_DIV 16 /* arbitrary, relative to CPU freq to have a
                            10 MHz frequency */
 
+
+#ifdef __MINGW32__
+
+// struct timespec { long tv_sec; long tv_nsec; };    //header part
+int clock_gettime(int x, struct timespec *spec)      //C-file part
+{  
+   (void)(x);
+   __int64 wintime; GetSystemTimeAsFileTime((FILETIME*)&wintime);
+   wintime      -=116444736000000000ULL;  //1jan1601 to 1jan1970
+   spec->tv_sec  =wintime / 10000000ULL;           //seconds
+   spec->tv_nsec =wintime % 10000000ULL *100;      //nano-seconds
+   return 0;
+}
+
+#endif
+
+
 static uint64_t rtc_get_real_time(RISCVMachine *s)
 {
     struct timespec ts;

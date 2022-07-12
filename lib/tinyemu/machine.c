@@ -153,7 +153,7 @@ static char *cmdline_subst(const char *cmdline)
                 /* get the offset to UTC */
                 time(&ti);
                 localtime_r(&ti, &tm);
-                n = tm.tm_gmtoff / 60;
+                n = 0;//tm.tm_gmtoff / 60;
                 sg = '-';
                 if (n < 0) {
                     sg = '+';
