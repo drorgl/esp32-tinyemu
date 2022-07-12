@@ -871,14 +871,17 @@ static void load_file_to_vmm(VMM_t *vmm, const char * filename, uint32_t address
     fclose(f);
 }
 
-static void copy_bios(RISCVMachine *s, const char * bios_filename, const char * kernel_filename,
+static void copy_bios(RISCVMachine *s, const char * bios_filename, 
+                        const char * kernel_filename,
+                        const char * initrd_filename,
                       const char *cmd_line)
 {
-    uint32_t fdt_addr, kernel_align, kernel_base;
+    uint32_t fdt_addr, kernel_align, kernel_base, initrd_base;
     uint8_t *ram_ptr;
     // uint32_t *q;
 
     uint32_t kernel_size = 0;
+    uint32_t initrd_size = 0;
 
     // if (buf_len > s->ram_size) {
     //     vm_error("BIOS too big\n");
@@ -917,15 +920,34 @@ static void copy_bios(RISCVMachine *s, const char * bios_filename, const char * 
         kernel_base = 0;
     }
 
+    if (initrd_filename != NULL && strlen(initrd_filename) > 0) {
+        /* same allocation as QEMU */
+        initrd_base = s->ram_size / 2;
+        if (initrd_base > (128 << 20))
+            initrd_base = 128 << 20;
+        // memcpy(ram_ptr + initrd_base, initrd_buf, initrd_buf_len);
+        // printf("copying initrd from %s to 0x%" PRIx64 " %d bytes\r\n",initrd_filename,(uint64_t) (ram_ptr - pr->phys_mem)+ initrd_base, initrd_size);
+        load_file_to_vmm(pr->vmm,initrd_filename,  ram_ptr - pr->phys_mem + initrd_base,&initrd_size );
+        printf("copied initrd from %s to 0x%" PRIx64 " %d bytes\r\n",initrd_filename,(uint64_t) (ram_ptr - pr->phys_mem)+ initrd_base, initrd_size);
+        // if (initrd_buf_len + initrd_base > s->ram_size) {
+        //     vm_error("initrd too big");
+        //     exit(1);
+        // }
+    }else{
+        initrd_base = 0;
+    }
+
     ram_ptr = get_ram_ptr(s, 0, TRUE);
     pr = get_phys_mem_range(s->mem_map, 0);
     assert(pr);
     
     fdt_addr = 0x1000 + 8 * 8;
 
+    printf("building fdt\n");
     riscv_build_fdt(s, ram_ptr + fdt_addr,
-                    RAM_BASE_ADDR + kernel_base,
-                    kernel_size, cmd_line);
+                    RAM_BASE_ADDR + kernel_base, kernel_size,
+                    RAM_BASE_ADDR + initrd_base, initrd_size,
+                    cmd_line);
 
     printf("writing jump address ram ptr: 0x%" PRIx64 " phy: 0x%p\r\n", (uint64_t)ram_ptr  - (uint64_t)pr->phys_mem, pr->phys_mem);
     /* jump_addr = 0x80000000 */
@@ -1109,7 +1131,9 @@ static VirtMachine *riscv_machine_init(const VirtMachineParams *p)
     //     vm_error("No bios found\r\n");
     // }
 
-    copy_bios(s, p->files[VM_FILE_BIOS].filename, p->files[VM_FILE_KERNEL].filename,
+    copy_bios(s, p->files[VM_FILE_BIOS].filename, 
+                p->files[VM_FILE_KERNEL].filename,
+                p->files[VM_FILE_INITRD].filename,
               p->cmdline);
     
     return (VirtMachine *)s;
