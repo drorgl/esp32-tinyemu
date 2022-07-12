@@ -1,0 +1,18 @@
+{
+    "name": "list",
+    "version": "0.2.0",
+    "keywords": "doubly linked list",
+    "description": "C doubly linked list implementation.",
+    "build": {
+        "srcFilter": [
+            "+<*>"
+        ]
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/clibs/list"
+    },
+    "license": "MIT",
+    "frameworks": "*",
+    "dependencies": []
+}
