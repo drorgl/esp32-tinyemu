@@ -34,6 +34,10 @@
 #error unsupported XLEN
 #endif
 
+#ifdef ESP32
+#include "esp_task_wdt.h"
+#endif
+
 static inline intx_t glue(div, XLEN)(intx_t a, intx_t b)
 {
     if (b == 0) {
@@ -185,26 +189,27 @@ static inline uintx_t glue(mulhsu, XLEN)(intx_t a, uintx_t b)
     case n+(24 << 2): case n+(25 << 2): case n+(26 << 2): case n+(27 << 2): \
     case n+(28 << 2): case n+(29 << 2): case n+(30 << 2): case n+(31 << 2): 
 
-#define GET_PC() (target_ulong)((uintptr_t)code_ptr + code_to_pc_addend)
-#define GET_INSN_COUNTER() (insn_counter_addend - s->n_cycles)
+#define GET_PC() (code_ptr + code_to_pc_addend)
+#define GET_INSN_COUNTER() (insn_counter_addend - n_cycles)
 
 #define C_NEXT_INSN code_ptr += 2; break
 #define NEXT_INSN code_ptr += 4; break
 #define JUMP_INSN do {   \
-        code_ptr = NULL;           \
-        code_end = NULL;           \
+        code_ptr = 0;           \
+        code_end = 0;           \
         code_to_pc_addend = s->pc; \
         goto jump_insn;            \
     } while (0)
 
 static void no_inline glue(riscv_cpu_interp_x, XLEN)(RISCVCPUState *s,
-                                                   int n_cycles1)
+                                                   int n_cycles)
 {
     uint32_t opcode, insn, rd, rs1, rs2, funct3;
+    uint32_t insnvmm;
     int32_t imm, cond, err;
     target_ulong addr, val, val2;
 #ifndef USE_GLOBAL_VARIABLES
-    uint8_t *code_ptr, *code_end;
+    uint32_t code_ptr, code_end;
     target_ulong code_to_pc_addend;
 #endif
     uint64_t insn_counter_addend;
@@ -213,95 +218,264 @@ static void no_inline glue(riscv_cpu_interp_x, XLEN)(RISCVCPUState *s,
     int32_t rm;
 #endif
 
-    if (n_cycles1 == 0)
+    // static uint32_t cc = 0;
+    if (n_cycles == 0)
         return;
-    insn_counter_addend = s->insn_counter + n_cycles1;
-    s->n_cycles = n_cycles1;
+    insn_counter_addend = s->insn_counter + n_cycles;
 
     /* check pending interrupts */
     if (unlikely((s->mip & s->mie) != 0)) {
-        if (raise_interrupt(s)) {
-            s->n_cycles--; 
+        if (raise_interrupt(s))
             goto done_interp;
-        }
     }
 
     s->pending_exception = -1;
+    n_cycles++;
     /* Note: we assume NULL is represented as a zero number */
-    code_ptr = NULL;
-    code_end = NULL;
+    code_ptr = 0;
+    code_end = 0;
     code_to_pc_addend = s->pc;
     
     /* we use a single execution loop to keep a simple control flow
        for emscripten */
+    // bool display_cycle = false;
+
     for(;;) {
-        if (unlikely(code_ptr >= code_end)) {
-            uint32_t tlb_idx;
-            uint16_t insn_high;
-            target_ulong addr;
-            uint8_t *ptr;
-            
+// #ifdef ESP32
+//         esp_task_wdt_reset();
+// #endif
+        // if (GET_PC() == 0x00000000c007dffe){
+            // static uint32_t cc = 0;
+            // if (cc % 10000 == 0){
+            //  printf("executing 0x%" PRIX32 "\r\n", GET_PC());
+
+            // }
+            // cc++;
+        //      display_cycle = true;
+        // }else{
+        //     display_cycle = false;
+        // }
+
+
+        --n_cycles;
+        if (unlikely(code_ptr >= code_end))
+        {
             s->pc = GET_PC();
-            /* we test n_cycles only between blocks so that timer
-               interrupts only happen between the blocks. It is
-               important to reduce the translated code size. */
-            if (unlikely(s->n_cycles <= 0))
+            
+            if (unlikely(n_cycles <= 0))
                 goto the_end;
 
             /* check pending interrupts */
             if (unlikely((s->mip & s->mie) != 0)) {
                 if (raise_interrupt(s)) {
-                    s->n_cycles--; 
                     goto the_end;
                 }
             }
-    
+
             addr = s->pc;
-            tlb_idx = (addr >> PG_SHIFT) & (TLB_SIZE - 1);
-            if (likely(s->tlb_code[tlb_idx].vaddr == (addr & ~PG_MASK))) {
-                /* TLB match */ 
-                ptr = (uint8_t *)(s->tlb_code[tlb_idx].mem_addend +
-                                  (uintptr_t)addr);
-            } else {
-                if (unlikely(target_read_insn_slow(s, &ptr, addr)))
-                    goto mmu_exception;
-            }
-            code_ptr = ptr;
-            code_end = ptr + (PG_MASK - 1 - (addr & PG_MASK));
-            code_to_pc_addend = addr - (uintptr_t)code_ptr;
+
+            uint32_t vmm_address;
+            if (unlikely(target_read_insn_slow_vmm(s, &vmm_address,addr)))
+                        goto mmu_exception;
+            
+            code_ptr = vmm_address;
+            code_end = vmm_address + (PG_MASK - 1 - ( addr & PG_MASK));
+            code_to_pc_addend =  addr -code_ptr;
+
+            // printf("code ptr 0x%" PRIX32 " end 0x%" PRIX32 " addend 0x%" PRIX32"\r\n", code_ptr, code_end, code_to_pc_addend );
+
             if (unlikely(code_ptr >= code_end)) {
                 /* instruction is potentially half way between two
                    pages ? */
-                insn = *(uint16_t *)code_ptr;
-                if ((insn & 3) == 3) {
+                // printf("half!\r\n");
+                uint32_t full_insn = get_vmm_insn32(s, vmm_address);;
+                insnvmm = (uint16_t )full_insn;
+                // insnvmm = vmmptr;
+                // insn = (uint16_t)code_ptr;
+                if ((insnvmm & 3) == 3) {
+                    // printf("half vmm insn 0x%" PRIX32 " at 0x%" PRIX32 "\r\n", full_insn, vmm_address);
                     /* instruction is half way between two pages */
-                    if (unlikely(target_read_insn_u16(s, &insn_high, addr + 2)))
+                    uint32_t vmm_address_high;
+
+
+                    if (unlikely(target_read_insn_slow_vmm(s, &vmm_address_high, GET_PC() + 2)))
                         goto mmu_exception;
-                    insn |= insn_high << 16;
+                    uint32_t other_half_insn = get_vmm_insn32(s, vmm_address_high);
+                    // printf("other half vmm insn 0x%" PRIX32 " at 0x%" PRIX32 "\r\n", other_half_insn, vmm_address_high);
+                    insnvmm |= ((uint16_t)other_half_insn) << 16;
                 }
-            } else {
-                insn = get_insn32(code_ptr);
+            }else{
+                insnvmm = get_vmm_insn32(s, code_ptr);
             }
-        } else {
-            /* fast path */
-            insn = get_insn32(code_ptr);
+        }else{
+            insnvmm = get_vmm_insn32(s, code_ptr);
         }
-        s->n_cycles--;
-#if 0
+
+        insn = insnvmm;
+
+
+        // printf("Executing 0x%"  PRIX32 " \r\n", code_ptr);
+        // --n_cycles;
+        // if (unlikely(code_ptr >= code_end)) {
+        //     if (display_cycle){
+        //         printf("code ptr1 0x%p code end 0x%p\r\n", code_ptr, code_end);
+        //     }
+        //     // uint32_t tlb_idx;
+        //     uint16_t insn_high;
+        //     // uint16_t insn_high_vmm;
+        //     target_ulong addr;
+        //     uint8_t *ptr;
+        //     // uint8_t *vmmptr;
+            
+        //     s->pc = GET_PC();
+        //     if (display_cycle){
+        //      printf("s->pc 0x%" PRIX32 "\r\n", GET_PC());
+        //     }
+        //     /* we test n_cycles only between blocks so that timer
+        //        interrupts only happen between the blocks. It is
+        //        important to reduce the translated code size. */
+        //     if (unlikely(n_cycles <= 0))
+        //         goto the_end;
+
+        //     /* check pending interrupts */
+        //     if (unlikely((s->mip & s->mie) != 0)) {
+        //         if (raise_interrupt(s)) {
+        //             goto the_end;
+        //         }
+        //     }
+    
+        //     addr = s->pc;
+        //     // tlb_idx = (addr >> PG_SHIFT) & (TLB_SIZE - 1);
+        //     // if (likely(s->tlb_code[tlb_idx].vaddr == (addr & ~PG_MASK))) {
+        //     //     /* TLB match */ 
+        //     //     ptr = (uint8_t *)(s->tlb_code[tlb_idx].mem_addend +
+        //     //                       (uintptr_t)addr);
+        //     //     printf("from tlb\r\n");
+        //     // } else {
+        //         if (unlikely(target_read_insn_slow(s, &ptr, addr)))
+        //             goto mmu_exception;
+        //         // if (unlikely(target_read_insn_slow_vmm(s, &vmmptr, addr)))
+        //         //     goto mmu_exception;
+        //         if (display_cycle){
+        //             printf("from insn\r\n");
+        //         }
+        //     // }
+        //     code_ptr = ptr;
+        //     if (display_cycle){
+        //         printf("setting next code ptr to 0x%p \r\n", code_ptr);
+        //     }
+        //     code_end = ptr + (PG_MASK - 1 - (addr & PG_MASK));
+        //     code_to_pc_addend = addr - (uintptr_t)code_ptr;
+
+        //     if (display_cycle){
+        //         printf("code ptr2 0x%p code end 0x%p\r\n", code_ptr, code_end);
+        //     }
+        //     if (unlikely(code_ptr >= code_end)) {
+        //         /* instruction is potentially half way between two
+        //            pages ? */
+        //         insn = *(uint16_t *)code_ptr;
+        //         // insnvmm = vmmptr;
+        //         // insn = (uint16_t)code_ptr;
+        //         if ((insn & 3) == 3) {
+        //             /* instruction is half way between two pages */
+        //             if (unlikely(target_read_insn_u16(s, &insn_high, addr + 2)))
+        //                 goto mmu_exception;
+        //             insn |= insn_high << 16;
+        //         }
+        //         // if ((insnvmm & 3) == 3){
+        //         //     if (unlikely(target_read_insn_u16_vmm(s, &insn_high_vmm, addr+2)))
+        //         //         goto mmu_exception;
+        //         //     insnvmm |= insn_high_vmm << 16;
+        //         // }
+
+        //         // if (insn != insnvmm){
+        //                 // printf("insn1 0x%" PRIX32 " != 0x%" PRIX32"\r\n", insn, insnvmm);
+        //             if (display_cycle){
+        //                 printf("Load1 Inst32 0x%p 0x%" PRIX32 " \r\n", code_ptr, insn);
+        //             }
+        //         // }
+        //     } else {
+        //         // printf("code ptr3 0x%" PRIX32" code end 0x%" PRIX32"\r\n", code_ptr, code_end);
+        //         // PhysMemoryRange *pr = get_phys_mem_range(s->mem_map, code_ptr);
+        //         // assert(pr);
+        //         // printf("loading code from address 0x%" PRIx64 "\r\n", (uint64_t)code_ptr - pr->addr);
+        //         // printf("loading code from address 1 0x%" PRIx64 "\r\n", (uint64_t)(uint32_t)code_ptr );
+
+        //         // uint32_t insn1 = get_vmm_insn32(s, code_ptr);
+
+        //         // assert(insn == insn1);
+        //         insn = get_insn32(code_ptr);
+        //         // insnvmm = get_vmm_insn32(s,s->pc);
+        //         // if (insn != insnvmm){
+        //         //     printf("insn2 0x%" PRIX32 " != 0x%" PRIX32"\r\n", insn, insnvmm);
+        //         // }
+        //         // insn = get_vmm_insn32(s, (uint32_t)code_ptr);
+        //     //     cc++;
+        //     //     if (cc % 1000 == 0){
+        //         if (display_cycle){
+        //             printf("Load2 Inst32 0x%p 0x%" PRIX32 " \r\n", code_ptr, insn);
+        //         }
+        //     //     }
+        //     }
+        // } else {
+        //     // printf("code ptr4 0x%" PRIX32" code end 0x%" PRIX32"\r\n", code_ptr, code_end);
+        //     // PhysMemoryRange *pr = get_phys_mem_range(s->mem_map, code_ptr);
+        //     // assert(pr);
+        //     // printf("loading code from address 0x%" PRIx64 "\r\n", (uint64_t)code_ptr - pr->addr);
+        //     // printf("loading code from address 2 0x%" PRIx64 "\r\n", (uint64_t)(uint32_t)code_ptr );
+        //     /* fast path */
+        //     // uint32_t insn1 = get_vmm_insn32(s, code_ptr);
+        //     // assert(insn == insn1);
+        //     insn = get_insn32(code_ptr);
+        //     // insnvmm = get_vmm_insn32(s,code_ptr - pr->phys_mem);
+        //     // if (insn != insnvmm){
+        //     //     printf("insn3 0x%" PRIX32 " != 0x%" PRIX32"\r\n", insn, insnvmm);
+        //     // }
+        //     // insn = get_vmm_insn32(s, (uint32_t)code_ptr);
+
+        //     //     cc++;
+        //     //     if (cc % 1000 == 0){
+        //         if (display_cycle){
+        //             printf("Load3 Inst32 0x%p 0x%" PRIX32 " \r\n", code_ptr, insn);
+        //         }
+        //     //     }
+        // }
+        
+        // {
+           
+        //     if (insnvmm != insn){
+        //         printf("insn vmm 0x%" PRIX32 " != 0x%" PRIX32" at 0x%p\r\n", insn, insnvmm, GET_PC());
+        //     }
+        // }
+
+#if 1
         if (1) {
 #ifdef CONFIG_LOGFILE
             log_printf("pc=0x"); fprint_target_ulong(log_file, GET_PC()); log_printf(" insn=%08x\n", insn);
             fflush(log_file);
 #else
-            printf("pc=0x"); print_target_ulong(GET_PC()); printf(" insn=%08x\n", insn);
+static uint32_t ccc = 0;
+#ifdef ESP32
+        if ((ccc % (1024 * 50)) == 0){
+            // vTaskDelay(pdMS_TO_TICKS(10));
+        }
+#endif
+        if ((ccc % (1024 * 1024 )) == 0){
+            // printf("pc=0x"); print_target_ulong(GET_PC()); printf(" insn=%08x\n", insn);
+        }
+            ccc++;
             //            dump_regs(s);
 #endif
         }
 #endif
+
         opcode = insn & 0x7f;
         rd = (insn >> 7) & 0x1f;
         rs1 = (insn >> 15) & 0x1f;
         rs2 = (insn >> 20) & 0x1f;
+        // if (cc % 1000 == 0){
+        // printf("opcode 0x%" PRIX8 " rd 0x%" PRIX8 " rs1 0x%" PRIX8 " rs2 0x%" PRIX8 "\r\n", opcode, rd, rs1, rs2);
+        // }
         switch(opcode) {
 #ifdef CONFIG_EXT_C
         C_QUADRANT(0)
@@ -353,8 +527,10 @@ static void no_inline glue(riscv_cpu_interp_x, XLEN)(RISCVCPUState *s,
                         get_field1(insn, 5, 6, 6);
                     rs1 = ((insn >> 7) & 7) | 8;
                     addr = (intx_t)(s->reg[rs1] + imm);
+                    
                     if (target_read_u32(s, &rval, addr))
                         goto mmu_exception;
+                    // printf("reading 0x%" PRIX32 " value 0x%" PRIX32 "\r\n", addr, rval);
                     s->reg[rd] = (int32_t)rval;
                 }
                 break;
@@ -1245,8 +1421,10 @@ static void no_inline glue(riscv_cpu_interp_x, XLEN)(RISCVCPUState *s,
                     s->pc = GET_PC() + 4;
                     if (err == 2)
                         JUMP_INSN;
-                    else
+                    else{
+                        // printf("csrrw\r\n");
                         goto done_interp;
+                    }
                 }
                 break;
             case 2: /* csrrs */
@@ -1272,8 +1450,10 @@ static void no_inline glue(riscv_cpu_interp_x, XLEN)(RISCVCPUState *s,
                     s->pc = GET_PC() + 4;
                     if (err == 2)
                         JUMP_INSN;
-                    else
+                    else{
+                        // printf("csrrc\r\n");
                         goto done_interp;
+                    }
                 }
                 break;
             case 0:
@@ -1296,6 +1476,7 @@ static void no_inline glue(riscv_cpu_interp_x, XLEN)(RISCVCPUState *s,
                             goto illegal_insn;
                         s->pc = GET_PC();
                         handle_sret(s);
+                        // printf("sret\r\n");
                         goto done_interp;
                     }
                     break;
@@ -1307,6 +1488,7 @@ static void no_inline glue(riscv_cpu_interp_x, XLEN)(RISCVCPUState *s,
                             goto illegal_insn;
                         s->pc = GET_PC();
                         handle_mret(s);
+                        // printf("mret\r\n");
                         goto done_interp;
                     }
                     break;
@@ -1320,6 +1502,7 @@ static void no_inline glue(riscv_cpu_interp_x, XLEN)(RISCVCPUState *s,
                     if ((s->mip & s->mie) == 0) {
                         s->power_down_flag = TRUE;
                         s->pc = GET_PC() + 4;
+                        // printf("wfi\r\n");
                         goto done_interp;
                     }
                     break;
@@ -1712,24 +1895,29 @@ static void no_inline glue(riscv_cpu_interp_x, XLEN)(RISCVCPUState *s,
     jump_insn: ;
     } /* end of main loop */
  illegal_insn:
+    // printf("illegal instruction\r\n");
     s->pending_exception = CAUSE_ILLEGAL_INSTRUCTION;
     s->pending_tval = insn;
  mmu_exception:
+    // printf("mmu exception\r\n");
  exception:
+    // printf("exception\r\n");
     s->pc = GET_PC();
     if (s->pending_exception >= 0) {
-        /* Note: the idea is that one exception counts for one cycle. */
-        s->n_cycles--; 
-        raise_exception2(s, s->pending_exception, s->pending_tval);
+        raise_exception2(s,(uint32_t) s->pending_exception, s->pending_tval);
     }
     /* we exit because XLEN may have changed */
  done_interp:
+    // printf("done interp\r\n");
+    n_cycles--;
 the_end:
+    // printf("the end\r\n");
     s->insn_counter = GET_INSN_COUNTER();
 #if 0
     printf("done interp %lx int=%x mstatus=%lx prv=%d\n",
            (uint64_t)s->insn_counter, s->mip & s->mie, (uint64_t)s->mstatus,
            s->priv);
+    // *(uint8_t*)0 = 0;
 #endif
 }
 

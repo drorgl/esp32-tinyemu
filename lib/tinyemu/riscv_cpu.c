@@ -33,9 +33,9 @@
 #include "iomem.h"
 #include "riscv_cpu.h"
 
-#ifndef MAX_XLEN
-#error MAX_XLEN must be defined
-#endif
+#ifdef MAX_XLEN
+
+
 #ifndef CONFIG_RISCV_MAX_XLEN
 #error CONFIG_RISCV_MAX_XLEN must be defined
 #endif
@@ -149,6 +149,7 @@ static __attribute__((unused)) void cpu_abort(RISCVCPUState *s)
     abort();
 }
 
+#if 0
 /* addr must be aligned. Only RAM accesses are supported */
 #define PHYS_MEM_READ_WRITE(size, uint_type) \
 static __maybe_unused inline void phys_write_u ## size(RISCVCPUState *s, target_ulong addr,\
@@ -159,6 +160,7 @@ static __maybe_unused inline void phys_write_u ## size(RISCVCPUState *s, target_
         return;\
     *(uint_type *)(pr->phys_mem + \
                  (uintptr_t)(addr - pr->addr)) = val;\
+    vmm_write(pr->vmm,addr - pr->addr, &val, sizeof(uint_type));\
 }\
 \
 static __maybe_unused inline uint_type phys_read_u ## size(RISCVCPUState *s, target_ulong addr) \
@@ -166,9 +168,35 @@ static __maybe_unused inline uint_type phys_read_u ## size(RISCVCPUState *s, tar
     PhysMemoryRange *pr = get_phys_mem_range(s->mem_map, addr);\
     if (!pr || !pr->is_ram)\
         return 0;\
-    return *(uint_type *)(pr->phys_mem + \
+    uint_type memtmp = *(uint_type *)(pr->phys_mem + \
                           (uintptr_t)(addr - pr->addr));     \
+    uint_type tmp; \
+    vmm_read(pr->vmm,addr - pr->addr, &tmp, sizeof(uint_type) );\
+    assert(tmp == memtmp); \
+    return memtmp; \
 }
+
+#else
+#define PHYS_MEM_READ_WRITE(size, uint_type) \
+static __maybe_unused inline void phys_write_u ## size(RISCVCPUState *s, target_ulong addr,\
+                                        uint_type val)                   \
+{\
+    PhysMemoryRange *pr = get_phys_mem_range(s->mem_map, addr);\
+    if (!pr || !pr->is_ram)\
+        return;\
+    vmm_write(pr->vmm,addr - (target_ulong)pr->addr, &val, sizeof(uint_type));\
+}\
+\
+static __maybe_unused inline uint_type phys_read_u ## size(RISCVCPUState *s, target_ulong addr) \
+{\
+    PhysMemoryRange *pr = get_phys_mem_range(s->mem_map, addr);\
+    if (!pr || !pr->is_ram)\
+        return 0;\
+    uint_type tmp; \
+    vmm_read(pr->vmm,addr - (target_ulong)pr->addr, &tmp, sizeof(uint_type) );\
+    return tmp;\
+}
+#endif
 
 PHYS_MEM_READ_WRITE(8, uint8_t)
 PHYS_MEM_READ_WRITE(32, uint32_t)
@@ -297,7 +325,7 @@ static int get_phys_addr(RISCVCPUState *s,
 int target_read_slow(RISCVCPUState *s, mem_uint_t *pval,
                      target_ulong addr, int size_log2)
 {
-    int size, tlb_idx, err, al;
+    int size, err, al;// tlb_idx,
     target_ulong paddr, offset;
     uint8_t *ptr;
     PhysMemoryRange *pr;
@@ -381,23 +409,43 @@ int target_read_slow(RISCVCPUState *s, mem_uint_t *pval,
 #endif
             return 0;
         } else if (pr->is_ram) {
-            tlb_idx = (addr >> PG_SHIFT) & (TLB_SIZE - 1);
-            ptr = pr->phys_mem + (uintptr_t)(paddr - pr->addr);
-            s->tlb_read[tlb_idx].vaddr = addr & ~PG_MASK;
-            s->tlb_read[tlb_idx].mem_addend = (uintptr_t)ptr - addr;
+            // tlb_idx = (addr >> PG_SHIFT) & (TLB_SIZE - 1);
+            ptr = pr->phys_mem + /*(uintptr_t)*/(paddr - pr->addr);
+            // s->tlb_read[tlb_idx].vaddr = addr & ~PG_MASK;
+            // s->tlb_read[tlb_idx].mem_addend = (uintptr_t)ptr - addr;
             switch(size_log2) {
             case 0:
-                ret = *(uint8_t *)ptr;
+                {
+                // ret = *(uint8_t *)ptr;
+                uint8_t tret1;
+                vmm_read(pr->vmm, ptr - pr->phys_mem, &tret1, sizeof(uint8_t));
+                ret = tret1;
+                }
                 break;
             case 1:
-                ret = *(uint16_t *)ptr;
+                {
+                // ret = *(uint16_t *)ptr;
+                uint16_t tret2;
+                vmm_read(pr->vmm, ptr - pr->phys_mem, &tret2, sizeof(uint16_t));
+                ret = tret2;
+                }
                 break;
             case 2:
-                ret = *(uint32_t *)ptr;
+            {
+                // ret = *(uint32_t *)ptr;
+                uint32_t tret3;
+                vmm_read(pr->vmm, ptr - pr->phys_mem, &tret3, sizeof(uint32_t));
+                ret = tret3;
+            }
                 break;
 #if MLEN >= 64
             case 3:
-                ret = *(uint64_t *)ptr;
+            {
+                // ret = *(uint64_t *)ptr;
+                uint64_t tret4;
+                vmm_read(pr->vmm, ptr - pr->phys_mem, &tret4, sizeof(uint64_t));
+                ret = tret4;
+            }
                 break;
 #endif
 #if MLEN >= 128
@@ -439,7 +487,7 @@ int target_read_slow(RISCVCPUState *s, mem_uint_t *pval,
 int target_write_slow(RISCVCPUState *s, target_ulong addr,
                       mem_uint_t val, int size_log2)
 {
-    int size, i, tlb_idx, err;
+    int size, i, err;//, tlb_idx
     target_ulong paddr, offset;
     uint8_t *ptr;
     PhysMemoryRange *pr;
@@ -468,23 +516,39 @@ int target_write_slow(RISCVCPUState *s, target_ulong addr,
 #endif
         } else if (pr->is_ram) {
             phys_mem_set_dirty_bit(pr, paddr - pr->addr);
-            tlb_idx = (addr >> PG_SHIFT) & (TLB_SIZE - 1);
-            ptr = pr->phys_mem + (uintptr_t)(paddr - pr->addr);
-            s->tlb_write[tlb_idx].vaddr = addr & ~PG_MASK;
-            s->tlb_write[tlb_idx].mem_addend = (uintptr_t)ptr - addr;
+            // tlb_idx = (addr >> PG_SHIFT) & (TLB_SIZE - 1);
+            ptr = pr->phys_mem + /*(uintptr_t)*/(paddr - pr->addr);
+            // s->tlb_write[tlb_idx].vaddr = addr & ~PG_MASK;
+            // s->tlb_write[tlb_idx].mem_addend = (uintptr_t)ptr - addr;
             switch(size_log2) {
             case 0:
-                *(uint8_t *)ptr = val;
+            {
+                // *(uint8_t *)ptr = val;
+                uint8_t tval1 = val;
+                vmm_write(pr->vmm, ptr - pr->phys_mem, &tval1, sizeof(uint8_t));
+            }
                 break;
             case 1:
-                *(uint16_t *)ptr = val;
+            {
+                // *(uint16_t *)ptr = val;
+                uint16_t tval2 = val;
+                vmm_write(pr->vmm, ptr - pr->phys_mem, &tval2, sizeof(uint16_t));
+            }
                 break;
             case 2:
-                *(uint32_t *)ptr = val;
+            {
+                // *(uint32_t *)ptr = val;
+                uint32_t tval3 = val;
+                vmm_write(pr->vmm, ptr - pr->phys_mem, &tval3, sizeof(uint32_t));
+            }
                 break;
 #if MLEN >= 64
             case 3:
-                *(uint64_t *)ptr = val;
+            {
+                // *(uint64_t *)ptr = val;
+                uint64_t tval4 = val;
+                vmm_write(pr->vmm, ptr - pr->phys_mem, &tval4, sizeof(uint64_t));
+            }
                 break;
 #endif
 #if MLEN >= 128
@@ -526,21 +590,93 @@ struct __attribute__((packed)) unaligned_u32 {
 };
 
 /* unaligned access at an address known to be a multiple of 2 */
-static uint32_t get_insn32(uint8_t *ptr)
+// static uint32_t get_insn32(uint8_t *ptr)
+// {
+    
+// #if defined(EMSCRIPTEN)
+//     return ((uint16_t *)ptr)[0] | (((uint16_t *)ptr)[1] << 16);
+// #else
+//     return ((struct unaligned_u32 *)ptr)->u32;
+// #endif
+// }
+
+
+/* unaligned access at an address known to be a multiple of 2 */
+static uint32_t get_vmm_insn32(RISCVCPUState *s, uint32_t ptr)
 {
+
 #if defined(EMSCRIPTEN)
     return ((uint16_t *)ptr)[0] | (((uint16_t *)ptr)[1] << 16);
 #else
-    return ((struct unaligned_u32 *)ptr)->u32;
+    // ptr = 0 | (uint32_t)ptr;
+    // printf("loading code from address 0x%" PRIx64 "\r\n", (uint64_t)ptr);
+    // target_ulong paddr;
+    // if (get_phys_addr(s, &paddr, ptr, ACCESS_CODE)) {
+    //     s->pending_tval = ptr;
+    //     // printf("fault: fetch page fault 0x%" PRIx64 "\r\n",(uint64_t)ptr);
+    //     s->pending_exception = CAUSE_FETCH_PAGE_FAULT;
+    //     return -1;
+    // }
+
+    PhysMemoryRange *pr = get_phys_mem_range(s->mem_map, ptr);
+    // assert(pr);
+    if (pr != NULL){
+        //printf("pr valid!\r\n");
+    }
+    else{
+        printf("pr invalid! 0x%" PRIX32 "\r\n", ptr);
+        return 0;
+    }
+
+    // if (!pr || !pr->is_ram) {
+    //     /* XXX: we only access to execute code from RAM */
+    //     printf("pr not in ram 0x%" PRIX64 "!\r\n",ptr);
+    //     s->pending_tval = ptr;
+    //     printf("fault: fault fetch\r\n");
+    //     s->pending_exception = CAUSE_FAULT_FETCH;
+    //     return -1;
+    // }   
+
+    struct unaligned_u32 pinsptr;
+    // vmm_read(pr->vmm, paddr - pr->addr, &pinsptr, sizeof(struct unaligned_u32));
+    // printf("reading inst32 from  0x%" PRIX64 " 0x%" PRIX64 "  0x%" PRIX64 " \r\n",ptr, ptr - pr->addr, pr->addr);
+    vmm_read(pr->vmm, ptr -  pr->addr, &pinsptr, sizeof(struct unaligned_u32));
+    return pinsptr.u32;
+    // return ((struct unaligned_u32 *)ptr)->u32;
 #endif
 }
+
+
+
+/* return 0 if OK, != 0 if exception */
+static no_inline __exception int target_read_insn_slow_vmm(RISCVCPUState *s,
+                                                       uint32_t *pptr,
+                                                       target_ulong addr)
+{
+    // printf("Reading Instruction Slow 0x%" PRIX32 "\r\n", addr);
+    // int tlb_idx;
+    target_ulong paddr;
+    // uint8_t *ptr;
+    
+    if (get_phys_addr(s, &paddr, addr, ACCESS_CODE)) {
+        s->pending_tval = addr;
+        // printf("fault: fetch page fault\r\n");
+        s->pending_exception = CAUSE_FETCH_PAGE_FAULT;
+        return -1;
+    }
+
+   
+   *pptr = (paddr);
+    return 0;
+}
+
 
 /* return 0 if OK, != 0 if exception */
 static no_inline __exception int target_read_insn_slow(RISCVCPUState *s,
                                                        uint8_t **pptr,
                                                        target_ulong addr)
 {
-    int tlb_idx;
+    // int tlb_idx;
     target_ulong paddr;
     uint8_t *ptr;
     PhysMemoryRange *pr;
@@ -557,11 +693,23 @@ static no_inline __exception int target_read_insn_slow(RISCVCPUState *s,
         s->pending_exception = CAUSE_FAULT_FETCH;
         return -1;
     }
-    tlb_idx = (addr >> PG_SHIFT) & (TLB_SIZE - 1);
-    ptr = pr->phys_mem + (uintptr_t)(paddr - pr->addr);
-    s->tlb_code[tlb_idx].vaddr = addr & ~PG_MASK;
-    s->tlb_code[tlb_idx].mem_addend = (uintptr_t)ptr - addr;
+    // tlb_idx = (addr >> PG_SHIFT) & (TLB_SIZE - 1);
+    ptr = pr->phys_mem + /*(uintptr_t)*/(paddr - pr->addr);
+    // s->tlb_code[tlb_idx].vaddr = addr & ~PG_MASK;
+    // s->tlb_code[tlb_idx].mem_addend = (uintptr_t)ptr - addr;
+    // pr = get_phys_mem_range(s->mem_map, addr);
+    // printf("reading from ptr: 0x%p, physmem: 0x%p paddr: 0x%" PRIX32 " pr addr: 0x%" PRIX64 " \r\n", ptr, pr->phys_mem, paddr, pr->addr);
+
+    // printf("read vmm from 0x%p\r\n",(ptr - pr->phys_mem) );
+    // uint8_t * rawptr;
+    // vmm_read(pr->vmm, ptr - pr->phys_mem, &rawptr, sizeof(rawptr));
+
+    
     *pptr = ptr;
+    // // *pptr = rawptr;
+    // printf("read pptr 0x%" PRIx64 " ptr: 0x%p rawptr: 0x%p 0x%" PRIx32 " 0x%" PRIx64 "\r\n",(uint64_t)(*pptr - pr->phys_mem), ptr, rawptr, paddr, pr->addr);
+
+    // assert(rawptr == ptr);
     return 0;
 }
 
@@ -569,29 +717,32 @@ static no_inline __exception int target_read_insn_slow(RISCVCPUState *s,
 static inline __exception int target_read_insn_u16(RISCVCPUState *s, uint16_t *pinsn,
                                                    target_ulong addr)
 {
-    uint32_t tlb_idx;
+    // uint32_t tlb_idx;
     uint8_t *ptr;
     
-    tlb_idx = (addr >> PG_SHIFT) & (TLB_SIZE - 1);
-    if (likely(s->tlb_code[tlb_idx].vaddr == (addr & ~PG_MASK))) {
-        ptr = (uint8_t *)(s->tlb_code[tlb_idx].mem_addend +
-                          (uintptr_t)addr);
-    } else {
+    // tlb_idx = (addr >> PG_SHIFT) & (TLB_SIZE - 1);
+    // if (likely(s->tlb_code[tlb_idx].vaddr == (addr & ~PG_MASK))) {
+    //     ptr = (uint8_t *)(s->tlb_code[tlb_idx].mem_addend +
+    //                       (uintptr_t)addr);
+    // } else {
         if (target_read_insn_slow(s, &ptr, addr))
             return -1;
-    }
+    // }
     *pinsn = *(uint16_t *)ptr;
     return 0;
 }
 
+
+
 static void tlb_init(RISCVCPUState *s)
 {
+    (void)(s);
     int i;
     
     for(i = 0; i < TLB_SIZE; i++) {
-        s->tlb_read[i].vaddr = -1;
-        s->tlb_write[i].vaddr = -1;
-        s->tlb_code[i].vaddr = -1;
+        // s->tlb_read[i].vaddr = -1;
+        // s->tlb_write[i].vaddr = -1;
+        // s->tlb_code[i].vaddr = -1;
     }
 }
 
@@ -602,6 +753,7 @@ static void tlb_flush_all(RISCVCPUState *s)
 
 static void tlb_flush_vaddr(RISCVCPUState *s, target_ulong vaddr)
 {
+    (void)(vaddr);
     tlb_flush_all(s);
 }
 
@@ -610,19 +762,22 @@ static void glue(riscv_cpu_flush_tlb_write_range_ram,
                  MAX_XLEN)(RISCVCPUState *s,
                            uint8_t *ram_ptr, size_t ram_size)
 {
-    uint8_t *ptr, *ram_end;
-    int i;
+    (void)(s);
+    (void)(ram_ptr);
+    (void)(ram_size);
+    // uint8_t *ptr, *ram_end;
+    // int i;
     
-    ram_end = ram_ptr + ram_size;
-    for(i = 0; i < TLB_SIZE; i++) {
-        if (s->tlb_write[i].vaddr != -1) {
-            ptr = (uint8_t *)(s->tlb_write[i].mem_addend +
-                              (uintptr_t)s->tlb_write[i].vaddr);
-            if (ptr >= ram_ptr && ptr < ram_end) {
-                s->tlb_write[i].vaddr = -1;
-            }
-        }
-    }
+    // ram_end = ram_ptr + ram_size;
+    // for(i = 0; i < TLB_SIZE; i++) {
+        // if (s->tlb_write[i].vaddr != -1) {
+        //     ptr = (uint8_t *)(s->tlb_write[i].mem_addend +
+        //                       (uintptr_t)s->tlb_write[i].vaddr);
+        //     if (ptr >= ram_ptr && ptr < ram_end) {
+        //         s->tlb_write[i].vaddr = -1;
+        //     }
+        // }
+    // }
 }
 
 
@@ -661,7 +816,7 @@ static target_ulong get_mstatus(RISCVCPUState *s, target_ulong mask)
     return val;
 }
                               
-static int get_base_from_xlen(int xlen)
+static uint8_t get_base_from_xlen(int xlen)
 {
     if (xlen == 32)
         return 1;
@@ -1322,6 +1477,7 @@ static RISCVCPUState *glue(riscv_cpu_init, MAX_XLEN)(PhysMemoryMap *mem_map)
 
 static void glue(riscv_cpu_end, MAX_XLEN)(RISCVCPUState *s)
 {
+    (void)(s);
 #ifdef USE_GLOBAL_STATE
     free(s);
 #endif
@@ -1375,3 +1531,4 @@ RISCVCPUState *riscv_cpu_init(PhysMemoryMap *mem_map, int max_xlen)
 }
 #endif /* CONFIG_RISCV_MAX_XLEN == MAX_XLEN */
 
+#endif

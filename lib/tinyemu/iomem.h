@@ -24,6 +24,8 @@
 #ifndef IOMEM_H
 #define IOMEM_H
 
+#include <vmm.h>
+
 typedef void DeviceWriteFunc(void *opaque, uint32_t offset,
                              uint32_t val, int size_log2);
 typedef uint32_t DeviceReadFunc(void *opaque, uint32_t offset, int size_log2);
@@ -51,6 +53,7 @@ typedef struct {
     BOOL is_ram;
     /* the following is used for RAM access */
     int devram_flags;
+    VMM_t * vmm;
     uint8_t *phys_mem;
     int dirty_bits_size; /* in bytes */
     uint32_t *dirty_bits; /* NULL if not used */

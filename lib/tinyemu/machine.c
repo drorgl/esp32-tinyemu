@@ -41,6 +41,8 @@
 #include "fs_wget.h"
 #endif
 
+#include <virtual_directory.h>
+
 void __attribute__((format(printf, 1, 2))) vm_error(const char *fmt, ...)
 {
     va_list ap;
@@ -417,8 +419,8 @@ typedef struct {
 
 static void config_file_loaded(void *opaque, uint8_t *buf, int buf_len);
 static void config_additional_file_load(VMConfigLoadState *s);
-static void config_additional_file_load_cb(void *opaque,
-                                           uint8_t *buf, int buf_len);
+// static void config_additional_file_load_cb(void *opaque,
+//                                            uint8_t *buf, int buf_len);
 
 /* XXX: win32, URL */
 char *get_file_path(const char *base_filename, const char *filename)
@@ -440,6 +442,7 @@ char *get_file_path(const char *base_filename, const char *filename)
     len = p + 1 - base_filename;
     len1 = strlen(filename);
     fname = malloc(len + len1 + 1);
+    assert(fname);
     memcpy(fname, base_filename, len);
     memcpy(fname + len, filename, len1 + 1);
     return fname;
@@ -458,18 +461,27 @@ static int load_file(uint8_t **pbuf, const char *filename)
     FILE *f;
     int size;
     uint8_t *buf;
+
+    char fullpath[256];
+    vd_cwd(fullpath, sizeof(fullpath));
+    strncat(fullpath,filename, sizeof(fullpath)-1);
     
-    f = fopen(filename, "rb");
+    f = fopen(fullpath, "rb");
     if (!f) {
-        perror(filename);
+        perror(fullpath);
         exit(1);
+    }
+    if (setvbuf(f, NULL, _IOFBF, 1024 * 8) != 0)
+    {
+        perror ("setvbuf");
     }
     fseek(f, 0, SEEK_END);
     size = ftell(f);
     fseek(f, 0, SEEK_SET);
     buf = malloc(size);
+    assert(buf);
     if (fread(buf, 1, size, f) != size) {
-        fprintf(stderr, "%s: read error\n", filename);
+        fprintf(stderr, "%s: read error\n", fullpath);
         exit(1);
     }
     fclose(f);
@@ -495,6 +507,7 @@ static void config_load_file_cb(void *opaque, int err, void *data, size_t size)
 static void config_load_file(VMConfigLoadState *s, const char *filename,
                              FSLoadFileCB *cb, void *opaque)
 {
+    (void)(s);
     //    printf("loading %s\n", filename);
 #ifdef CONFIG_FS_NET
     if (is_url(filename)) {
@@ -543,40 +556,44 @@ static void config_file_loaded(void *opaque, uint8_t *buf, int buf_len)
 
 static void config_additional_file_load(VMConfigLoadState *s)
 {
+    printf("Loading %d\r\n", s->file_index);
     VirtMachineParams *p = s->vm_params;
     while (s->file_index < VM_FILE_COUNT &&
            p->files[s->file_index].filename == NULL) {
         s->file_index++;
     }
-    if (s->file_index == VM_FILE_COUNT) {
+
         if (s->start_cb)
             s->start_cb(s->opaque);
         free(s);
-    } else {
-        char *fname;
+    // if (s->file_index == VM_FILE_COUNT) {
+    // } else {
+    //     char *fname;
         
-        fname = get_file_path(p->cfg_filename,
-                              p->files[s->file_index].filename);
-        config_load_file(s, fname,
-                         config_additional_file_load_cb, s);
-        free(fname);
-    }
+    //     fname = get_file_path(p->cfg_filename,
+    //                           p->files[s->file_index].filename);
+    //     config_load_file(s, fname,
+    //                      config_additional_file_load_cb, s);
+    //     free(fname);
+    // }
 }
 
-static void config_additional_file_load_cb(void *opaque,
-                                           uint8_t *buf, int buf_len)
-{
-    VMConfigLoadState *s = opaque;
-    VirtMachineParams *p = s->vm_params;
+// static void config_additional_file_load_cb(void *opaque,
+//                                            uint8_t *buf, int buf_len)
+// {
+//     printf("Configuring File Load %d bytes\r\n", buf_len);
+//     VMConfigLoadState *s = opaque;
+//     VirtMachineParams *p = s->vm_params;
 
-    p->files[s->file_index].buf = malloc(buf_len);
-    memcpy(p->files[s->file_index].buf, buf, buf_len);
-    p->files[s->file_index].len = buf_len;
+//     p->files[s->file_index].buf = malloc(buf_len);
+//     assert(p->files[s->file_index].buf);
+//     memcpy(p->files[s->file_index].buf, buf, buf_len);
+//     p->files[s->file_index].len = buf_len;
 
-    /* load the next files */
-    s->file_index++;
-    config_additional_file_load(s);
-}
+//     /* load the next files */
+//     s->file_index++;
+//     config_additional_file_load(s);
+// }
 
 void vm_add_cmdline(VirtMachineParams *p, const char *cmdline)
 {
@@ -588,6 +605,7 @@ void vm_add_cmdline(VirtMachineParams *p, const char *cmdline)
         if (!old_cmdline)
             old_cmdline = "";
         new_cmdline = malloc(strlen(old_cmdline) + 1 + strlen(cmdline) + 1);
+        assert(new_cmdline);
         strcpy(new_cmdline, old_cmdline);
         strcat(new_cmdline, " ");
         strcat(new_cmdline, cmdline);

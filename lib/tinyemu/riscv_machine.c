@@ -38,6 +38,8 @@
 #include "virtio.h"
 #include "machine.h"
 
+#include <virtual_directory.h>
+
 /* RISCV machine */
 
 typedef struct RISCVMachine {
@@ -79,7 +81,6 @@ typedef struct RISCVMachine {
 #define RTC_FREQ_DIV 16 /* arbitrary, relative to CPU freq to have a
                            10 MHz frequency */
 
-
 #ifdef __MINGW32__
 
 // struct timespec { long tv_sec; long tv_nsec; };    //header part
@@ -95,9 +96,9 @@ int clock_gettime(int x, struct timespec *spec)      //C-file part
 
 #endif
 
-
 static uint64_t rtc_get_real_time(RISCVMachine *s)
 {
+    (void)(s);
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (uint64_t)ts.tv_sec * RTC_FREQ +
@@ -525,6 +526,7 @@ static void fdt_prop_tab_str(FDTState *s, const char *prop_name,
     va_end(ap);
     
     tab = malloc(size);
+    assert(tab);
     va_start(ap, prop_name);
     size = 0;
     for(;;) {
@@ -542,55 +544,108 @@ static void fdt_prop_tab_str(FDTState *s, const char *prop_name,
 }
 
 /* write the FDT to 'dst1'. return the FDT size in bytes */
-int fdt_output(FDTState *s, uint8_t *dst)
+int fdt_output(RISCVMachine *m, FDTState *s, uint8_t *dst)
 {
-    struct fdt_header *h;
-    struct fdt_reserve_entry *re;
+    // struct fdt_header *h;
+    // struct fdt_reserve_entry *re;
     int dt_struct_size;
     int dt_strings_size;
     int pos;
-
-    assert(s->open_node_count == 0);
-    
-    fdt_put32(s, FDT_END);
     
     dt_struct_size = s->tab_len * sizeof(uint32_t);
     dt_strings_size = s->string_table_len;
 
-    h = (struct fdt_header *)dst;
-    h->magic = cpu_to_be32(FDT_MAGIC);
-    h->version = cpu_to_be32(FDT_VERSION);
-    h->last_comp_version = cpu_to_be32(16);
-    h->boot_cpuid_phys = cpu_to_be32(0);
-    h->size_dt_strings = cpu_to_be32(dt_strings_size);
-    h->size_dt_struct = cpu_to_be32(dt_struct_size);
+    // printf("dt struct size: %d, dt strings size: %d\r\n", dt_struct_size, dt_strings_size);
+
+    printf("fdt dst 0x%" PRIx64 "\r\n", (uint64_t)(uintptr_t ) (dst));
+    PhysMemoryRange *pr = get_phys_mem_range(m->mem_map, 0x0);
+
+    struct fdt_header hdr;
+    vmm_read(pr->vmm, (dst - pr->phys_mem),&hdr, sizeof(struct fdt_header));
+
+    // h = (struct fdt_header *)dst;
+    hdr.magic = cpu_to_be32(FDT_MAGIC);
+    // h->magic = cpu_to_be32(FDT_MAGIC);
+    hdr.version = cpu_to_be32(FDT_VERSION); 
+    // h->version = cpu_to_be32(FDT_VERSION);
+    hdr.last_comp_version = cpu_to_be32(16);
+    // h->last_comp_version = cpu_to_be32(16);
+    hdr.boot_cpuid_phys = cpu_to_be32(0);
+    // h->boot_cpuid_phys = cpu_to_be32(0);
+    hdr.size_dt_strings = cpu_to_be32(dt_strings_size);
+    // h->size_dt_strings = cpu_to_be32(dt_strings_size);
+    hdr.size_dt_struct = cpu_to_be32(dt_struct_size);
+    // h->size_dt_struct = cpu_to_be32(dt_struct_size);
+    
 
     pos = sizeof(struct fdt_header);
 
-    h->off_dt_struct = cpu_to_be32(pos);
-    memcpy(dst + pos, s->tab, dt_struct_size);
+    // h->off_dt_struct = cpu_to_be32(pos);
+    hdr.off_dt_struct = cpu_to_be32(pos);
+    vmm_write(pr->vmm, (dst - pr->phys_mem),&hdr, sizeof(struct fdt_header));
+
+    // memcpy(dst + pos, s->tab, dt_struct_size);
+    vmm_write(pr->vmm,(dst + pos) - pr->phys_mem, s->tab, dt_struct_size);
+
     pos += dt_struct_size;
 
     /* align to 8 */
     while ((pos & 7) != 0) {
-        dst[pos++] = 0;
+        // dst[pos++] = 0;
+        vmm_write(pr->vmm, dst + pos - pr->phys_mem, "\0", 1);
+        pos++;
     }
-    h->off_mem_rsvmap = cpu_to_be32(pos);
-    re = (struct fdt_reserve_entry *)(dst + pos);
-    re->address = 0; /* no reserved entry */
-    re->size = 0;
+
+    vmm_read(pr->vmm, (dst - pr->phys_mem),&hdr, sizeof(struct fdt_header));
+    hdr.off_mem_rsvmap = cpu_to_be32(pos);
+    vmm_write(pr->vmm, (dst - pr->phys_mem),&hdr, sizeof(struct fdt_header));
+    // h->off_mem_rsvmap = cpu_to_be32(pos);
+
+    // re = (struct fdt_reserve_entry *)(dst + pos);
+    struct fdt_reserve_entry res;
+    vmm_read(pr->vmm, dst + pos - pr->phys_mem, &res, sizeof(struct fdt_reserve_entry));
+    res.address = 0; /* no reserved entry */
+    // re->address = 0; /* no reserved entry */
+    res.size = 0;
+    // re->size = 0;
+    vmm_write(pr->vmm, dst + pos -pr->phys_mem, &res, sizeof(struct fdt_reserve_entry));
+
     pos += sizeof(struct fdt_reserve_entry);
 
-    h->off_dt_strings = cpu_to_be32(pos);
-    memcpy(dst + pos, s->string_table, dt_strings_size);
+    vmm_read(pr->vmm, (dst - pr->phys_mem),&hdr, sizeof(struct fdt_header));
+    hdr.off_dt_strings = cpu_to_be32(pos);
+    vmm_write(pr->vmm, (dst - pr->phys_mem),&hdr, sizeof(struct fdt_header));
+    // h->off_dt_strings = cpu_to_be32(pos);
+
+    // memcpy(dst + pos, s->string_table, dt_strings_size);
+    vmm_write(pr->vmm, dst+pos - pr->phys_mem, s->string_table, dt_strings_size);
+
     pos += dt_strings_size;
 
     /* align to 8, just in case */
     while ((pos & 7) != 0) {
-        dst[pos++] = 0;
+        // dst[pos++] = 0;
+        vmm_write(pr->vmm, dst + pos - pr->phys_mem, "\0", 1);
+        pos++;
     }
 
-    h->totalsize = cpu_to_be32(pos);
+    vmm_read(pr->vmm, (dst - pr->phys_mem),&hdr, sizeof(struct fdt_header));
+    hdr.totalsize = cpu_to_be32(pos);
+    // h->totalsize = cpu_to_be32(pos);
+    vmm_write(pr->vmm, (dst - pr->phys_mem),&hdr, sizeof(struct fdt_header));
+
+
+    // uint8_t * testbuff = malloc(0x1024);
+    // vmm_read(pr->vmm, (dst - pr->phys_mem),testbuff, 0x1024);
+    // for (int i = 0; i < 0x1024; i++){
+    //     if (dst[i] != testbuff[i]){
+    //         printf("dst 0x%" PRIx8 " !=  0x%" PRIx8 " at 0x%p \r\n", dst[i], testbuff[i], dst - pr->phys_mem + i  );
+    //     }
+    // }
+    // free(testbuff);
+    // h = (struct fdt_header *)dst;
+
+
     return pos;
 }
 
@@ -750,12 +805,15 @@ static int riscv_build_fdt(RISCVMachine *m, uint8_t *dst,
         fdt_prop_tab_u64(s, "linux,initrd-end", initrd_start + initrd_size);
     }
     
-
     fdt_end_node(s); /* chosen */
     
     fdt_end_node(s); /* / */
 
-    size = fdt_output(s, dst);
+    assert(s->open_node_count == 0);
+    fdt_put32(s, FDT_END);
+
+    // size = fdt_output_original(s, dst);
+    size = fdt_output(m, s, dst);
 #if 0
     {
         FILE *f;
@@ -768,69 +826,130 @@ static int riscv_build_fdt(RISCVMachine *m, uint8_t *dst,
     return size;
 }
 
-static void copy_bios(RISCVMachine *s, const uint8_t *buf, int buf_len,
-                      const uint8_t *kernel_buf, int kernel_buf_len,
-                      const uint8_t *initrd_buf, int initrd_buf_len,
-                      const char *cmd_line)
-{
-    uint32_t fdt_addr, align, kernel_base, initrd_base;
-    uint8_t *ram_ptr;
-    uint32_t *q;
 
-    if (buf_len > s->ram_size) {
-        vm_error("BIOS too big\n");
+static void load_file_to_vmm(VMM_t *vmm, const char * filename, uint32_t address, uint32_t * read_size){
+    char fullpath[256];
+    vd_cwd(fullpath, sizeof(fullpath));
+    strncat(fullpath,filename, sizeof(fullpath)-1);
+
+    FILE * f = fopen(fullpath, "rb");
+    if (!f) {
+        printf("Unable to load %s\r\n", filename);
+        perror(fullpath);
         exit(1);
     }
-
-    ram_ptr = get_ram_ptr(s, RAM_BASE_ADDR, TRUE);
-    memcpy(ram_ptr, buf, buf_len);
-
-    kernel_base = 0;
-    if (kernel_buf_len > 0) {
-        /* copy the kernel if present */
-        if (s->max_xlen == 32)
-            align = 4 << 20; /* 4 MB page align */
-        else
-            align = 2 << 20; /* 2 MB page align */
-        kernel_base = (buf_len + align - 1) & ~(align - 1);
-        memcpy(ram_ptr + kernel_base, kernel_buf, kernel_buf_len);
-        if (kernel_buf_len + kernel_base > s->ram_size) {
-            vm_error("kernel too big");
-            exit(1);
-        }
-    }
-
-    initrd_base = 0;
-    if (initrd_buf_len > 0) {
-        /* same allocation as QEMU */
-        initrd_base = s->ram_size / 2;
-        if (initrd_base > (128 << 20))
-            initrd_base = 128 << 20;
-        memcpy(ram_ptr + initrd_base, initrd_buf, initrd_buf_len);
-        if (initrd_buf_len + initrd_base > s->ram_size) {
-            vm_error("initrd too big");
-            exit(1);
-        }
+    if (setvbuf(f, NULL, _IOFBF, 1024 * 8) != 0)
+    {
+        perror ("setvbuf");
     }
     
+    fseek(f, 0, SEEK_END);
+    *read_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    uint32_t total_read = 0;
+
+    uint8_t * buffer = malloc(1024);
+    assert(buffer);
+    do{
+        size_t bytes_read = fread(buffer, 1, 1024, f);
+        if (bytes_read > 0){
+            vmm_write(vmm,address, buffer, bytes_read);
+            address+=bytes_read;
+            total_read += bytes_read;
+        }else{
+            break;
+        }
+    }while(true);
+    free(buffer);
+
+    if (total_read != *read_size){
+    // if (fread(buf, 1, read_size, f) != read_size) {
+        fprintf(stderr, "%s: read error, should have been %d bytes, but was %d bytes\n", fullpath, *read_size, total_read);
+        exit(1);
+    }
+    fclose(f);
+}
+
+static void copy_bios(RISCVMachine *s, const char * bios_filename, const char * kernel_filename,
+                      const char *cmd_line)
+{
+    uint32_t fdt_addr, kernel_align, kernel_base;
+    uint8_t *ram_ptr;
+    // uint32_t *q;
+
+    uint32_t kernel_size = 0;
+
+    // if (buf_len > s->ram_size) {
+    //     vm_error("BIOS too big\n");
+    //     exit(1);
+    // }
+
+    //ram_ptr = phys_mem_get_ram_ptr(s->mem_map, RAM_BASE_ADDR, TRUE);
+
+    ram_ptr = get_ram_ptr(s, RAM_BASE_ADDR, TRUE);
+    PhysMemoryRange *pr = get_phys_mem_range(s->mem_map, RAM_BASE_ADDR);
+
+    
+    uint32_t bios_size = 0;
+    // vmm_write(pr->vmm, ram_ptr - pr->phys_mem, buf, buf_len);
+    load_file_to_vmm(pr->vmm,bios_filename, ram_ptr - pr->phys_mem, &bios_size);
+    printf("copied bios from %s to 0x%" PRIx64 " %d bytes\r\n", bios_filename, (uint64_t)(ram_ptr - pr->phys_mem), bios_size);
+
+    // printf("copying bios from 0x%" PRIx64 " to ptr 0x%" PRIx64 " %d bytes\r\n",(uint64_t)buf,(uint64_t) (ram_ptr), buf_len);
+    // memcpy(ram_ptr, buf, buf_len);
+
+    if (strlen(kernel_filename) > 0) {
+        /* copy the kernel if present */
+        if (s->max_xlen == 32)
+            kernel_align = 4 << 20; /* 4 MB page align */
+        else
+            kernel_align = 2 << 20; /* 2 MB page align */
+        kernel_base = (bios_size + kernel_align - 1) & ~(kernel_align - 1);
+        // printf("copying kernel from 0x%" PRIx64 " to 0x%" PRIx64 " %d bytes\r\n",(uint64_t)kernel_buf,(uint64_t) (ram_ptr + kernel_base), kernel_buf_len);
+        // memcpy(ram_ptr + kernel_base, kernel_buf, kernel_buf_len);
+
+        //vmm_write(pr->vmm, ram_ptr - pr->phys_mem + kernel_base, kernel_buf, kernel_buf_len);
+        load_file_to_vmm(pr->vmm,kernel_filename,  ram_ptr - pr->phys_mem + kernel_base,&kernel_size );
+        printf("copied kernel from %s to 0x%" PRIx64 " %d bytes\r\n",kernel_filename,(uint64_t) (ram_ptr - pr->phys_mem)+ kernel_base, kernel_size);
+        // = filesize
+    } else {
+        kernel_base = 0;
+    }
+
     ram_ptr = get_ram_ptr(s, 0, TRUE);
+    pr = get_phys_mem_range(s->mem_map, 0);
+    assert(pr);
     
     fdt_addr = 0x1000 + 8 * 8;
 
     riscv_build_fdt(s, ram_ptr + fdt_addr,
-                    RAM_BASE_ADDR + kernel_base, kernel_buf_len,
-                    RAM_BASE_ADDR + initrd_base, initrd_buf_len,
-                    cmd_line);
+                    RAM_BASE_ADDR + kernel_base,
+                    kernel_size, cmd_line);
 
+    printf("writing jump address ram ptr: 0x%" PRIx64 " phy: 0x%p\r\n", (uint64_t)ram_ptr  - (uint64_t)pr->phys_mem, pr->phys_mem);
     /* jump_addr = 0x80000000 */
-    
-    q = (uint32_t *)(ram_ptr + 0x1000);
-    q[0] = 0x297 + 0x80000000 - 0x1000; /* auipc t0, jump_addr */
-    q[1] = 0x597; /* auipc a1, dtb */
-    q[2] = 0x58593 + ((fdt_addr - 4) << 20); /* addi a1, a1, dtb */
-    q[3] = 0xf1402573; /* csrr a0, mhartid */
-    q[4] = 0x00028067; /* jalr zero, t0, jump_addr */
+    uint32_t qbuf[5];
+    vmm_read(pr->vmm, ram_ptr  - pr->phys_mem +  0x1000, &qbuf, sizeof(qbuf));
+    qbuf[0] = 0x297 + 0x80000000 - 0x1000; /* auipc t0, jump_addr */
+    qbuf[1] = 0x597; /* auipc a1, dtb */
+    qbuf[2] = 0x58593 + ((fdt_addr - 4) << 20); /* addi a1, a1, dtb */
+    qbuf[3] = 0xf1402573; /* csrr a0, mhartid */
+    qbuf[4] = 0x00028067; /* jalr zero, t0, jump_addr */
+    vmm_write(pr->vmm, ram_ptr  - pr->phys_mem+  0x1000, &qbuf, sizeof(qbuf));
+
+
+    // printf("writing jump address ram ptr: 0x%" PRIx64 " phy: 0x%p\r\n", ram_ptr + 0x1000, pr->phys_mem);
+    // q = (uint32_t *)(ram_ptr + 0x1000);
+    // q[0] = 0x297 + 0x80000000 - 0x1000; /* auipc t0, jump_addr */
+    // q[1] = 0x597; /* auipc a1, dtb */
+    // q[2] = 0x58593 + ((fdt_addr - 4) << 20); /* addi a1, a1, dtb */
+    // q[3] = 0xf1402573; /* csrr a0, mhartid */
+    // q[4] = 0x00028067; /* jalr zero, t0, jump_addr */
+
+    // printf("bootstrap 0x%" PRIx64 " 0x%" PRIx64 "\r\n",(uint64_t)q[0],(uint64_t)qbuf[0] );
 }
+
 
 static void riscv_flush_tlb_write_range(void *opaque, uint8_t *ram_addr,
                                         size_t ram_size)
@@ -841,6 +960,7 @@ static void riscv_flush_tlb_write_range(void *opaque, uint8_t *ram_addr,
 
 static void riscv_machine_set_defaults(VirtMachineParams *p)
 {
+    (void)(p);
 }
 
 static VirtMachine *riscv_machine_init(const VirtMachineParams *p)
@@ -885,15 +1005,18 @@ static VirtMachine *riscv_machine_init(const VirtMachineParams *p)
     if (p->rtc_real_time) {
         s->rtc_start_time = rtc_get_real_time(s);
     }
-    
+
+    printf("Registering CLINT\r\n");    
     cpu_register_device(s->mem_map, CLINT_BASE_ADDR, CLINT_SIZE, s,
                         clint_read, clint_write, DEVIO_SIZE32);
+    printf("Registering PLIC\r\n");
     cpu_register_device(s->mem_map, PLIC_BASE_ADDR, PLIC_SIZE, s,
                         plic_read, plic_write, DEVIO_SIZE32);
     for(i = 1; i < 32; i++) {
         irq_init(&s->plic_irq[i], plic_set_irq, s, i);
     }
 
+    printf("Registring HTIF\r\n");
     cpu_register_device(s->mem_map, HTIF_BASE_ADDR, 16,
                         s, htif_read, htif_write, DEVIO_SIZE32);
     s->common.console = p->console;
@@ -982,13 +1105,11 @@ static VirtMachine *riscv_machine_init(const VirtMachineParams *p)
         }
     }
     
-    if (!p->files[VM_FILE_BIOS].buf) {
-        vm_error("No bios found");
-    }
+    // if (!p->files[VM_FILE_BIOS].buf) {
+    //     vm_error("No bios found\r\n");
+    // }
 
-    copy_bios(s, p->files[VM_FILE_BIOS].buf, p->files[VM_FILE_BIOS].len,
-              p->files[VM_FILE_KERNEL].buf, p->files[VM_FILE_KERNEL].len,
-              p->files[VM_FILE_INITRD].buf, p->files[VM_FILE_INITRD].len,
+    copy_bios(s, p->files[VM_FILE_BIOS].filename, p->files[VM_FILE_KERNEL].filename,
               p->cmdline);
     
     return (VirtMachine *)s;
@@ -996,6 +1117,7 @@ static VirtMachine *riscv_machine_init(const VirtMachineParams *p)
 
 static void riscv_machine_end(VirtMachine *s1)
 {
+    printf("machine end\r\n");
     RISCVMachine *s = (RISCVMachine *)s1;
     /* XXX: stop all */
     riscv_cpu_end(s->cpu_state);
@@ -1006,6 +1128,7 @@ static void riscv_machine_end(VirtMachine *s1)
 /* in ms */
 static int riscv_machine_get_sleep_duration(VirtMachine *s1, int delay)
 {
+    // printf("machine get sleep duration %d\r\n", delay);
     RISCVMachine *m = (RISCVMachine *)s1;
     RISCVCPUState *s = m->cpu_state;
     int64_t delay1;
@@ -1030,6 +1153,7 @@ static int riscv_machine_get_sleep_duration(VirtMachine *s1, int delay)
 
 static void riscv_machine_interp(VirtMachine *s1, int max_exec_cycle)
 {
+    // printf("machine interp\r\n");
     RISCVMachine *s = (RISCVMachine *)s1;
     riscv_cpu_interp(s->cpu_state, max_exec_cycle);
 }
@@ -1037,6 +1161,7 @@ static void riscv_machine_interp(VirtMachine *s1, int max_exec_cycle)
 static void riscv_vm_send_key_event(VirtMachine *s1, BOOL is_down,
                                     uint16_t key_code)
 {
+    printf("machine send key event\r\n");
     RISCVMachine *s = (RISCVMachine *)s1;
     if (s->keyboard_dev) {
         virtio_input_send_key_event(s->keyboard_dev, is_down, key_code);
@@ -1045,12 +1170,14 @@ static void riscv_vm_send_key_event(VirtMachine *s1, BOOL is_down,
 
 static BOOL riscv_vm_mouse_is_absolute(VirtMachine *s)
 {
+    (void)(s);
     return TRUE;
 }
 
 static void riscv_vm_send_mouse_event(VirtMachine *s1, int dx, int dy, int dz,
                                       unsigned int buttons)
 {
+    printf("machine send mouse event\r\n");
     RISCVMachine *s = (RISCVMachine *)s1;
     if (s->mouse_dev) {
         virtio_input_send_mouse_event(s->mouse_dev, dx, dy, dz, buttons);

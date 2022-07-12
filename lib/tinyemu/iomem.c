@@ -31,6 +31,8 @@
 #include "cutils.h"
 #include "iomem.h"
 
+#include <virtual_directory.h>
+
 static PhysMemoryRange *default_register_ram(PhysMemoryMap *s, uint64_t addr,
                                              uint64_t size, int devram_flags);
 static void default_free_ram(PhysMemoryMap *s, PhysMemoryRange *pr);
@@ -80,6 +82,8 @@ PhysMemoryRange *get_phys_mem_range(PhysMemoryMap *s, uint64_t paddr)
 PhysMemoryRange *register_ram_entry(PhysMemoryMap *s, uint64_t addr,
                                     uint64_t size, int devram_flags)
 {
+    printf("Registering RAM Entry 0x%" PRIx64" %" PRIu64 " bytes\r\n", addr, size);
+    
     PhysMemoryRange *pr;
 
     assert(s->n_phys_mem_range < PHYS_MEM_RANGE_MAX);
@@ -102,15 +106,43 @@ PhysMemoryRange *register_ram_entry(PhysMemoryMap *s, uint64_t addr,
 static PhysMemoryRange *default_register_ram(PhysMemoryMap *s, uint64_t addr,
                                              uint64_t size, int devram_flags)
 {
+    printf("Registering RAM 0x%" PRIx64 ": %" PRIu64 " bytes\r\n", addr, size);
     PhysMemoryRange *pr;
 
     pr = register_ram_entry(s, addr, size, devram_flags);
 
-    pr->phys_mem = mallocz(size);
-    if (!pr->phys_mem) {
-        fprintf(stderr, "Could not allocate VM memory\n");
-        exit(1);
+    pr->phys_mem = NULL;
+
+
+    char filename[50];
+    snprintf(filename, sizeof(filename), "pagefile0x%" PRIx64 ".bin", addr);
+
+    char fullpath[256];
+    vd_cwd(fullpath, sizeof(fullpath));
+    strncat(fullpath, filename, sizeof(fullpath)-1);
+
+    uint32_t vmm_pages = 0;
+
+    if (size< 1024 * 1024) {
+        vmm_pages = (128 * 1024) / (16*1024);
+    } else {
+        vmm_pages = (2 * 1024 * 1024) / (16 * 1024);
     }
+
+    //testing new indexer
+    vmm_pages = 380;
+    uint32_t vmm_page_size = 1024 * 8;
+
+    size_t maxiumum_blocks = 500;
+    if (addr == 0){
+        maxiumum_blocks = 15; //bios doesn't need more than 128k
+        vmm_pages = 200;
+    }
+
+    pr->vmm = vmm_create(fullpath, size, vmm_page_size, vmm_pages, maxiumum_blocks);
+    assert(pr->vmm && "VMM not created");
+
+    printf("Registered RAM 0x%" PRIx64 ": %" PRIu64 " bytes at 0x%p\r\n", addr,size, pr->phys_mem );
 
     if (devram_flags & DEVRAM_FLAG_DIRTY_BITS) {
         size_t nb_pages;
@@ -178,6 +210,7 @@ void phys_mem_reset_dirty_bit(PhysMemoryRange *pr, size_t offset)
 
 static void default_free_ram(PhysMemoryMap *s, PhysMemoryRange *pr)
 {
+    (void)(s);
     free(pr->phys_mem);
 }
 
@@ -186,6 +219,8 @@ PhysMemoryRange *cpu_register_device(PhysMemoryMap *s, uint64_t addr,
                                      DeviceReadFunc *read_func, DeviceWriteFunc *write_func,
                                      int devio_flags)
 {
+    printf("Registering Device at 0x%" PRIx64" %" PRIu64 " bytes\r\n", addr, size);
+
     PhysMemoryRange *pr;
     assert(s->n_phys_mem_range < PHYS_MEM_RANGE_MAX);
     assert(size <= 0xffffffff);
@@ -251,7 +286,8 @@ uint8_t *phys_mem_get_ram_ptr(PhysMemoryMap *map, uint64_t paddr, BOOL is_rw)
     offset = paddr - pr->addr;
     if (is_rw)
         phys_mem_set_dirty_bit(pr, offset);
-    return pr->phys_mem + (uintptr_t)offset;
+    uint64_t ptr = pr->phys_mem + /*(uintptr_t)*/offset;
+    return (uint8_t*)ptr;
 }
 
 /* IRQ support */

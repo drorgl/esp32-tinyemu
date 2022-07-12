@@ -183,7 +183,7 @@ struct RISCVCPUState {
 
 #ifdef USE_GLOBAL_VARIABLES
     /* faster to use global variables with emscripten */
-    uint8_t *__code_ptr, *__code_end;
+    uint32_t __code_ptr, __code_end;
     target_ulong __code_to_pc_addend;
 #endif
     
@@ -198,7 +198,6 @@ struct RISCVCPUState {
     uint8_t fs; /* MSTATUS_FS value */
     uint8_t mxl; /* MXL field in MISA register */
     
-    int32_t n_cycles; /* only used inside the CPU loop */
     uint64_t insn_counter;
     BOOL power_down_flag;
     int pending_exception; /* used during MMU exception handling */
@@ -235,9 +234,9 @@ struct RISCVCPUState {
 
     PhysMemoryMap *mem_map;
 
-    TLBEntry tlb_read[TLB_SIZE];
-    TLBEntry tlb_write[TLB_SIZE];
-    TLBEntry tlb_code[TLB_SIZE];
+    // TLBEntry tlb_read[TLB_SIZE];
+    // TLBEntry tlb_write[TLB_SIZE];
+    // TLBEntry tlb_code[TLB_SIZE];
 };
 
 #define target_read_slow glue(glue(riscv, MAX_XLEN), _read_slow)
@@ -248,6 +247,10 @@ DLL_PUBLIC int target_read_slow(RISCVCPUState *s, mem_uint_t *pval,
 DLL_PUBLIC int target_write_slow(RISCVCPUState *s, target_ulong addr,
                                  mem_uint_t val, int size_log2);
 
+
+// #define WITH_TLB
+
+#ifdef WITH_TLB
 /* return 0 if OK, != 0 if exception */
 #define TARGET_READ_WRITE(size, uint_type, size_log2)                   \
 static inline __exception int target_read_u ## size(RISCVCPUState *s, uint_type *pval, target_ulong addr)                              \
@@ -273,12 +276,33 @@ static inline __exception int target_write_u ## size(RISCVCPUState *s, target_ul
     uint32_t tlb_idx;\
     tlb_idx = (addr >> PG_SHIFT) & (TLB_SIZE - 1);\
     if (likely(s->tlb_write[tlb_idx].vaddr == (addr & ~(PG_MASK & ~((size / 8) - 1))))) { \
-        *(uint_type *)(s->tlb_write[tlb_idx].mem_addend + (uintptr_t)addr) = val;\
+        *(uint_type *)(s->tlb_write[tlb_idx].mem_addend + /*(uintptr_t)*/addr) = val;\
         return 0;\
     } else {\
         return target_write_slow(s, addr, val, size_log2);\
     }\
 }
+#else
+
+/* return 0 if OK, != 0 if exception */
+#define TARGET_READ_WRITE(size, uint_type, size_log2)                   \
+static inline __exception int target_read_u ## size(RISCVCPUState *s, uint_type *pval, target_ulong addr)                              \
+{\
+        mem_uint_t val;\
+        int ret;\
+        ret = target_read_slow(s, &val, addr, size_log2);\
+        if (ret)\
+            return ret;\
+        *pval = val;\
+    return 0;\
+}\
+\
+static inline __exception int target_write_u ## size(RISCVCPUState *s, target_ulong addr,\
+                                          uint_type val)                \
+{\
+        return target_write_slow(s, addr, val, size_log2);\
+}
+#endif
 
 TARGET_READ_WRITE(8, uint8_t, 0)
 TARGET_READ_WRITE(16, uint16_t, 1)

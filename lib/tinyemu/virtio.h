@@ -24,16 +24,14 @@
 #ifndef VIRTIO_H
 #define VIRTIO_H
 
-#ifdef _WIN32
-#include <winsock2.h>
-#else
-#include <sys/select.h>
-#endif
-
 #include "iomem.h"
 #include "pci.h"
 
 #define VIRTIO_PAGE_SIZE 4096
+
+#ifdef WIN32
+#include <winsock2.h>
+#endif
 
 #if defined(EMSCRIPTEN)
 #define VIRTIO_ADDR_BITS 32
