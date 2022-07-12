@@ -43,6 +43,9 @@ The arguments for running temu on ESP32 are hardcoded to ```root-riscv32.cfg``` 
 }
 ```
 
+# How to build your own linux
+Please see [buildroot-tinyemu](https://github.com/drorgl/buildroot-tinyemu)
+
 # References
 * [TinyEMU](https://bellard.org/tinyemu/)
 * [TinyEMU Technical Documentation](https://bellard.org/tinyemu/readme.txt)
