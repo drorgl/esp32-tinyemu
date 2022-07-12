@@ -1,6 +1,6 @@
 /*
  * TinyEMU
- * 
+ *
  * Copyright (c) 2016-2018 Fabrice Bellard
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -55,7 +55,8 @@
 
 #ifndef _WIN32
 
-typedef struct {
+typedef struct
+{
     int stdin_fd;
     int console_esc_state;
     BOOL resize_pending;
@@ -67,7 +68,7 @@ static STDIODevice *global_stdio_device;
 
 static void term_exit(void)
 {
-    tcsetattr (0, TCSANOW, &oldtty);
+    tcsetattr(0, TCSANOW, &oldtty);
     fcntl(0, F_SETFL, old_fd0_flags);
 }
 
@@ -76,22 +77,21 @@ static void term_init(BOOL allow_ctrlc)
     struct termios tty;
 
     memset(&tty, 0, sizeof(tty));
-    tcgetattr (0, &tty);
+    tcgetattr(0, &tty);
     oldtty = tty;
     old_fd0_flags = fcntl(0, F_GETFL);
 
-    tty.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP
-                          |INLCR|IGNCR|ICRNL|IXON);
+    tty.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL | IXON);
     tty.c_oflag |= OPOST;
-    tty.c_lflag &= ~(ECHO|ECHONL|ICANON|IEXTEN);
+    tty.c_lflag &= ~(ECHO | ECHONL | ICANON | IEXTEN);
     if (!allow_ctrlc)
         tty.c_lflag &= ~ISIG;
-    tty.c_cflag &= ~(CSIZE|PARENB);
+    tty.c_cflag &= ~(CSIZE | PARENB);
     tty.c_cflag |= CS8;
     tty.c_cc[VMIN] = 1;
     tty.c_cc[VTIME] = 0;
 
-    tcsetattr (0, TCSANOW, &tty);
+    tcsetattr(0, TCSANOW, &tty);
 
     atexit(term_exit);
 }
@@ -107,24 +107,28 @@ static int console_read(void *opaque, uint8_t *buf, int len)
     STDIODevice *s = opaque;
     int ret, i, j;
     uint8_t ch;
-    
+
     if (len <= 0)
         return 0;
 
     ret = read(s->stdin_fd, buf, len);
     if (ret < 0)
         return 0;
-    if (ret == 0) {
+    if (ret == 0)
+    {
         /* EOF */
         exit(1);
     }
 
     j = 0;
-    for(i = 0; i < ret; i++) {
+    for (i = 0; i < ret; i++)
+    {
         ch = buf[i];
-        if (s->console_esc_state) {
+        if (s->console_esc_state)
+        {
             s->console_esc_state = 0;
-            switch(ch) {
+            switch (ch)
+            {
             case 'x':
                 printf("Terminated\n");
                 exit(0);
@@ -132,18 +136,22 @@ static int console_read(void *opaque, uint8_t *buf, int len)
                 printf("\n"
                        "C-a h   print this help\n"
                        "C-a x   exit emulator\n"
-                       "C-a C-a send C-a\n"
-                       );
+                       "C-a C-a send C-a\n");
                 break;
             case 1:
                 goto output_char;
             default:
                 break;
             }
-        } else {
-            if (ch == 1) {
+        }
+        else
+        {
+            if (ch == 1)
+            {
                 s->console_esc_state = 1;
-            } else {
+            }
+            else
+            {
             output_char:
                 buf[j++] = ch;
             }
@@ -166,7 +174,8 @@ static void console_get_size(STDIODevice *s, int *pw, int *ph)
     width = 80;
     height = 25;
     if (ioctl(s->stdin_fd, TIOCGWINSZ, &ws) == 0 &&
-        ws.ws_col >= 4 && ws.ws_row >= 4) {
+        ws.ws_col >= 4 && ws.ws_row >= 4)
+    {
         width = ws.ws_col;
         height = ws.ws_row;
     }
@@ -191,13 +200,13 @@ CharacterDevice *console_init(BOOL allow_ctrlc)
 
     s->resize_pending = TRUE;
     global_stdio_device = s;
-    
+
     /* use a signal to get the host terminal resize events */
     sig.sa_handler = term_resize_handler;
     sigemptyset(&sig.sa_mask);
     sig.sa_flags = 0;
     sigaction(SIGWINCH, &sig, NULL);
-    
+
     dev->opaque = s;
     dev->write_data = console_write;
     dev->read_data = console_read;
@@ -206,7 +215,8 @@ CharacterDevice *console_init(BOOL allow_ctrlc)
 
 #endif /* !_WIN32 */
 
-typedef enum {
+typedef enum
+{
     BF_MODE_RO,
     BF_MODE_RW,
     BF_MODE_SNAPSHOT,
@@ -214,7 +224,8 @@ typedef enum {
 
 #define SECTOR_SIZE 512
 
-typedef struct BlockDeviceFile {
+typedef struct BlockDeviceFile
+{
     FILE *f;
     int64_t nb_sectors;
     BlockDeviceModeEnum mode;
@@ -245,19 +256,26 @@ static int bf_read_async(BlockDevice *bs,
 #endif
     if (!bf->f)
         return -1;
-    if (bf->mode == BF_MODE_SNAPSHOT) {
+    if (bf->mode == BF_MODE_SNAPSHOT)
+    {
         int i;
-        for(i = 0; i < n; i++) {
-            if (!bf->sector_table[sector_num]) {
+        for (i = 0; i < n; i++)
+        {
+            if (!bf->sector_table[sector_num])
+            {
                 fseek(bf->f, sector_num * SECTOR_SIZE, SEEK_SET);
                 fread(buf, 1, SECTOR_SIZE, bf->f);
-            } else {
+            }
+            else
+            {
                 memcpy(buf, bf->sector_table[sector_num], SECTOR_SIZE);
             }
             sector_num++;
             buf += SECTOR_SIZE;
         }
-    } else {
+    }
+    else
+    {
         fseek(bf->f, sector_num * SECTOR_SIZE, SEEK_SET);
         fread(buf, 1, n * SECTOR_SIZE, bf->f);
     }
@@ -272,7 +290,8 @@ static int bf_write_async(BlockDevice *bs,
     BlockDeviceFile *bf = bs->opaque;
     int ret;
 
-    switch(bf->mode) {
+    switch (bf->mode)
+    {
     case BF_MODE_RO:
         ret = -1; /* error */
         break;
@@ -282,21 +301,23 @@ static int bf_write_async(BlockDevice *bs,
         ret = 0;
         break;
     case BF_MODE_SNAPSHOT:
+    {
+        int i;
+        if ((sector_num + n) > bf->nb_sectors)
+            return -1;
+        for (i = 0; i < n; i++)
         {
-            int i;
-            if ((sector_num + n) > bf->nb_sectors)
-                return -1;
-            for(i = 0; i < n; i++) {
-                if (!bf->sector_table[sector_num]) {
-                    bf->sector_table[sector_num] = malloc(SECTOR_SIZE);
-                }
-                memcpy(bf->sector_table[sector_num], buf, SECTOR_SIZE);
-                sector_num++;
-                buf += SECTOR_SIZE;
+            if (!bf->sector_table[sector_num])
+            {
+                bf->sector_table[sector_num] = malloc(SECTOR_SIZE);
             }
-            ret = 0;
+            memcpy(bf->sector_table[sector_num], buf, SECTOR_SIZE);
+            sector_num++;
+            buf += SECTOR_SIZE;
         }
-        break;
+        ret = 0;
+    }
+    break;
     default:
         abort();
     }
@@ -313,14 +334,18 @@ static BlockDevice *block_device_init(const char *filename,
     FILE *f;
     const char *mode_str;
 
-    if (mode == BF_MODE_RW) {
+    if (mode == BF_MODE_RW)
+    {
         mode_str = "r+b";
-    } else {
+    }
+    else
+    {
         mode_str = "rb";
     }
-    
+
     f = fopen(filename, mode_str);
-    if (!f) {
+    if (!f)
+    {
         perror(filename);
         exit(1);
     }
@@ -334,11 +359,12 @@ static BlockDevice *block_device_init(const char *filename,
     bf->nb_sectors = file_size / 512;
     bf->f = f;
 
-    if (mode == BF_MODE_SNAPSHOT) {
+    if (mode == BF_MODE_SNAPSHOT)
+    {
         bf->sector_table = mallocz(sizeof(bf->sector_table[0]) *
                                    bf->nb_sectors);
     }
-    
+
     bs->opaque = bf;
     bs->get_sector_count = bf_get_sector_count;
     bs->read_async = bf_read_async;
@@ -348,7 +374,8 @@ static BlockDevice *block_device_init(const char *filename,
 
 #ifndef _WIN32
 
-typedef struct {
+typedef struct
+{
     int fd;
     BOOL select_filled;
 } TunState;
@@ -368,13 +395,14 @@ static void tun_select_fill(EthernetDevice *net, int *pfd_max,
     int net_fd = s->fd;
 
     s->select_filled = net->device_can_write_packet(net);
-    if (s->select_filled) {
+    if (s->select_filled)
+    {
         FD_SET(net_fd, rfds);
         *pfd_max = max_int(*pfd_max, net_fd);
     }
 }
 
-static void tun_select_poll(EthernetDevice *net, 
+static void tun_select_poll(EthernetDevice *net,
                             fd_set *rfds, fd_set *wfds, fd_set *efds,
                             int select_ret)
 {
@@ -382,15 +410,15 @@ static void tun_select_poll(EthernetDevice *net,
     int net_fd = s->fd;
     uint8_t buf[2048];
     int ret;
-    
+
     if (select_ret <= 0)
         return;
-    if (s->select_filled && FD_ISSET(net_fd, rfds)) {
+    if (s->select_filled && FD_ISSET(net_fd, rfds))
+    {
         ret = read(net_fd, buf, sizeof(buf));
         if (ret > 0)
             net->device_write_packet(net, buf, ret);
     }
-    
 }
 
 /* configure with:
@@ -417,17 +445,19 @@ static EthernetDevice *tun_open(const char *ifname)
     int fd, ret;
     EthernetDevice *net;
     TunState *s;
-    
+
     fd = open("/dev/net/tun", O_RDWR);
-    if (fd < 0) {
+    if (fd < 0)
+    {
         fprintf(stderr, "Error: could not open /dev/net/tun\n");
         return NULL;
     }
     memset(&ifr, 0, sizeof(ifr));
     ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
     pstrcpy(ifr.ifr_name, sizeof(ifr.ifr_name), ifname);
-    ret = ioctl(fd, TUNSETIFF, (void *) &ifr);
-    if (ret != 0) {
+    ret = ioctl(fd, TUNSETIFF, (void *)&ifr);
+    if (ret != 0)
+    {
         fprintf(stderr, "Error: could not configure /dev/net/tun\n");
         close(fd);
         return NULL;
@@ -486,7 +516,7 @@ static void slirp_select_fill1(EthernetDevice *net, int *pfd_max,
     slirp_select_fill(slirp_state, pfd_max, rfds, wfds, efds);
 }
 
-static void slirp_select_poll1(EthernetDevice *net, 
+static void slirp_select_poll1(EthernetDevice *net,
                                fd_set *rfds, fd_set *wfds, fd_set *efds,
                                int select_ret)
 {
@@ -497,16 +527,17 @@ static void slirp_select_poll1(EthernetDevice *net,
 static EthernetDevice *slirp_open(void)
 {
     EthernetDevice *net;
-    struct in_addr net_addr  = { .s_addr = htonl(0x0a000200) }; /* 10.0.2.0 */
-    struct in_addr mask = { .s_addr = htonl(0xffffff00) }; /* 255.255.255.0 */
-    struct in_addr host = { .s_addr = htonl(0x0a000202) }; /* 10.0.2.2 */
-    struct in_addr dhcp = { .s_addr = htonl(0x0a00020f) }; /* 10.0.2.15 */
-    struct in_addr dns  = { .s_addr = htonl(0x0a000203) }; /* 10.0.2.3 */
+    struct in_addr net_addr = {.s_addr = htonl(0x0a000200)}; /* 10.0.2.0 */
+    struct in_addr mask = {.s_addr = htonl(0xffffff00)};     /* 255.255.255.0 */
+    struct in_addr host = {.s_addr = htonl(0x0a000202)};     /* 10.0.2.2 */
+    struct in_addr dhcp = {.s_addr = htonl(0x0a00020f)};     /* 10.0.2.15 */
+    struct in_addr dns = {.s_addr = htonl(0x0a000203)};      /* 10.0.2.3 */
     const char *bootfile = NULL;
     const char *vhostname = NULL;
     int restricted = 0;
-    
-    if (slirp_state) {
+
+    if (slirp_state)
+    {
         fprintf(stderr, "Only a single slirp instance is allowed\n");
         return NULL;
     }
@@ -514,7 +545,7 @@ static EthernetDevice *slirp_open(void)
 
     slirp_state = slirp_init(restricted, net_addr, mask, host, vhostname,
                              "", bootfile, dhcp, dns, net);
-    
+
     net->mac_addr[0] = 0x02;
     net->mac_addr[1] = 0x00;
     net->mac_addr[2] = 0x00;
@@ -525,7 +556,7 @@ static EthernetDevice *slirp_open(void)
     net->write_packet = slirp_write_packet;
     net->select_fill = slirp_select_fill1;
     net->select_poll = slirp_select_poll1;
-    
+
     return net;
 }
 
@@ -542,22 +573,24 @@ void virt_machine_run(VirtMachine *m)
 #ifndef _WIN32
     int stdin_fd;
 #endif
-    
+
     delay = virt_machine_get_sleep_duration(m, MAX_SLEEP_TIME);
-    
+
     /* wait for an event */
     FD_ZERO(&rfds);
     FD_ZERO(&wfds);
     FD_ZERO(&efds);
     fd_max = -1;
 #ifndef _WIN32
-    if (m->console_dev && virtio_console_can_write_data(m->console_dev)) {
+    if (m->console_dev && virtio_console_can_write_data(m->console_dev))
+    {
         STDIODevice *s = m->console->opaque;
         stdin_fd = s->stdin_fd;
         FD_SET(stdin_fd, &rfds);
         fd_max = stdin_fd;
 
-        if (s->resize_pending) {
+        if (s->resize_pending)
+        {
             int width, height;
             console_get_size(s, &width, &height);
             virtio_console_resize_event(m->console_dev, width, height);
@@ -565,7 +598,8 @@ void virt_machine_run(VirtMachine *m)
         }
     }
 #endif
-    if (m->net) {
+    if (m->net)
+    {
         m->net->select_fill(m->net, &fd_max, &rfds, &wfds, &efds, &delay);
     }
 #ifdef CONFIG_FS_NET
@@ -574,18 +608,22 @@ void virt_machine_run(VirtMachine *m)
     tv.tv_sec = delay / 1000;
     tv.tv_usec = (delay % 1000) * 1000;
     ret = select(fd_max + 1, &rfds, &wfds, &efds, &tv);
-    if (m->net) {
+    if (m->net)
+    {
         m->net->select_poll(m->net, &rfds, &wfds, &efds, ret);
     }
-    if (ret > 0) {
+    if (ret > 0)
+    {
 #ifndef _WIN32
-        if (m->console_dev && FD_ISSET(stdin_fd, &rfds)) {
+        if (m->console_dev && FD_ISSET(stdin_fd, &rfds))
+        {
             uint8_t buf[128];
             int ret, len;
             len = virtio_console_get_write_len(m->console_dev);
             len = min_int(len, sizeof(buf));
             ret = m->console->read_data(m->console->opaque, buf, len);
-            if (ret > 0) {
+            if (ret > 0)
+            {
                 virtio_console_write_data(m->console_dev, buf, ret);
             }
         }
@@ -595,21 +633,21 @@ void virt_machine_run(VirtMachine *m)
 #ifdef CONFIG_SDL
     sdl_refresh(m);
 #endif
-    
+
     virt_machine_interp(m, MAX_EXEC_CYCLE);
 }
 
 /*******************************************************/
 
 static struct option options[] = {
-    { "help", no_argument, NULL, 'h' },
-    { "ctrlc", no_argument },
-    { "rw", no_argument },
-    { "ro", no_argument },
-    { "append", required_argument },
-    { "no-accel", no_argument },
-    { "build-preload", required_argument },
-    { NULL },
+    {"help", no_argument, NULL, 'h'},
+    {"ctrlc", no_argument},
+    {"rw", no_argument},
+    {"ro", no_argument},
+    {"append", required_argument},
+    {"no-accel", no_argument},
+    {"build-preload", required_argument},
+    {NULL},
 };
 
 void help(void)
@@ -660,13 +698,16 @@ int main(int argc, char **argv)
     accel_enable = -1;
     cmdline = NULL;
     build_preload_file = NULL;
-    for(;;) {
+    for (;;)
+    {
         c = getopt_long_only(argc, argv, "hm:", options, &option_index);
         if (c == -1)
             break;
-        switch(c) {
+        switch (c)
+        {
         case 0:
-            switch(option_index) {
+            switch (option_index)
+            {
             case 1: /* ctrlc */
                 allow_ctrlc = TRUE;
                 break;
@@ -701,7 +742,8 @@ int main(int argc, char **argv)
         }
     }
 
-    if (optind >= argc) {
+    if (optind >= argc)
+    {
         help();
     }
 
@@ -718,28 +760,33 @@ int main(int argc, char **argv)
 
     /* override some config parameters */
 
-    if (ram_size > 0) {
+    if (ram_size > 0)
+    {
         p->ram_size = (uint64_t)ram_size << 20;
     }
     if (accel_enable != -1)
         p->accel_enable = accel_enable;
-    if (cmdline) {
+    if (cmdline)
+    {
         vm_add_cmdline(p, cmdline);
     }
-    
+
     /* open the files & devices */
-    for(i = 0; i < p->drive_count; i++) {
+    for (i = 0; i < p->drive_count; i++)
+    {
         BlockDevice *drive;
         char *fname;
         fname = get_file_path(p->cfg_filename, p->tab_drive[i].filename);
 #ifdef CONFIG_FS_NET
-        if (is_url(fname)) {
+        if (is_url(fname))
+        {
             net_completed = FALSE;
             drive = block_device_init_http(fname, 128 * 1024,
                                            net_start_cb, NULL);
             /* wait until the drive is initialized */
             fs_net_event_loop(net_poll_cb, NULL);
-        } else
+        }
+        else
 #endif
         {
             drive = block_device_init(fname, drive_mode);
@@ -748,19 +795,22 @@ int main(int argc, char **argv)
         p->tab_drive[i].block_dev = drive;
     }
 
-    for(i = 0; i < p->fs_count; i++) {
+    for (i = 0; i < p->fs_count; i++)
+    {
         FSDevice *fs;
         const char *path;
         path = p->tab_fs[i].filename;
 #ifdef CONFIG_FS_NET
-        if (is_url(path)) {
+        if (is_url(path))
+        {
             fs = fs_net_init(path, NULL, NULL);
             if (!fs)
                 exit(1);
             if (build_preload_file)
                 fs_dump_cache_load(fs, build_preload_file);
             fs_net_event_loop(NULL, NULL);
-        } else
+        }
+        else
 #endif
         {
 #ifdef _WIN32
@@ -770,7 +820,8 @@ int main(int argc, char **argv)
             char *fname;
             fname = get_file_path(p->cfg_filename, path);
             fs = fs_disk_init(fname);
-            if (!fs) {
+            if (!fs)
+            {
                 fprintf(stderr, "%s: must be a directory\n", fname);
                 exit(1);
             }
@@ -780,20 +831,25 @@ int main(int argc, char **argv)
         p->tab_fs[i].fs_dev = fs;
     }
 
-    for(i = 0; i < p->eth_count; i++) {
+    for (i = 0; i < p->eth_count; i++)
+    {
 #ifdef CONFIG_SLIRP
-        if (!strcmp(p->tab_eth[i].driver, "user")) {
+        if (!strcmp(p->tab_eth[i].driver, "user"))
+        {
             p->tab_eth[i].net = slirp_open();
             if (!p->tab_eth[i].net)
                 exit(1);
-        } else
+        }
+        else
 #endif
 #ifndef _WIN32
-        if (!strcmp(p->tab_eth[i].driver, "tap")) {
+            if (!strcmp(p->tab_eth[i].driver, "tap"))
+        {
             p->tab_eth[i].net = tun_open(p->tab_eth[i].ifname);
             if (!p->tab_eth[i].net)
                 exit(1);
-        } else
+        }
+        else
 #endif
         {
             fprintf(stderr, "Unsupported network driver '%s'\n",
@@ -801,11 +857,13 @@ int main(int argc, char **argv)
             exit(1);
         }
     }
-    
+
 #ifdef CONFIG_SDL
-    if (p->display_device) {
+    if (p->display_device)
+    {
         sdl_init(p->width, p->height);
-    } else
+    }
+    else
 #endif
     {
 #ifdef _WIN32
@@ -820,14 +878,16 @@ int main(int argc, char **argv)
     s = virt_machine_init(p);
     if (!s)
         exit(1);
-    
+
     virt_machine_free_config(p);
 
-    if (s->net) {
+    if (s->net)
+    {
         s->net->device_set_carrier(s->net, TRUE);
     }
-    
-    for(;;) {
+
+    for (;;)
+    {
         virt_machine_run(s);
     }
     virt_machine_end(s);
