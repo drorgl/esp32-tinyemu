@@ -182,6 +182,7 @@ CMOSState *cmos_init(PhysMemoryMap *port_map, int addr,
 
 static uint32_t cmos_get_timer(CMOSState *s)
 {
+    (void)(s);
     struct timespec ts;
 
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -225,6 +226,7 @@ static void cmos_update_irq(CMOSState *s)
 static void cmos_write(void *opaque, uint32_t offset,
                        uint32_t data, int size_log2)
 {
+    (void)(size_log2);
     CMOSState *s = opaque;
 
     if (offset == 0) {
@@ -252,6 +254,8 @@ static void cmos_write(void *opaque, uint32_t offset,
 
 static uint32_t cmos_read(void *opaque, uint32_t offset, int size_log2)
 {
+    (void)(size_log2);
+
     CMOSState *s = opaque;
     int ret;
 
@@ -427,6 +431,8 @@ static void pic_intack(PICState *s, int irq)
 static void pic_write(void *opaque, uint32_t offset,
                       uint32_t val, int size_log2)
 {
+    (void)(size_log2);
+
     PICState *s = opaque;
     int priority, addr;
     
@@ -527,6 +533,8 @@ static void pic_write(void *opaque, uint32_t offset,
 
 static uint32_t pic_read(void *opaque, uint32_t offset, int size_log2)
 {
+    (void)(size_log2);
+
     PICState *s = opaque;
     int addr, ret;
 
@@ -548,12 +556,18 @@ static uint32_t pic_read(void *opaque, uint32_t offset, int size_log2)
 static void pic_elcr_write(void *opaque, uint32_t offset,
                            uint32_t val, int size_log2)
 {
+    (void)(offset);
+    (void)(size_log2);
+
     PICState *s = opaque;
     s->elcr = val & s->elcr_mask;
 }
 
 static uint32_t pic_elcr_read(void *opaque, uint32_t offset, int size_log2)
 {
+    (void)(offset);
+    (void)(size_log2);
+
     PICState *s = opaque;
     return s->elcr;
 }
@@ -826,6 +840,7 @@ static void pit_load_count(PITChannel *s, int val)
 static void pit_write(void *opaque, uint32_t offset,
                       uint32_t val, int size_log2)
 {
+    (void)(size_log2);
     PITState *pit = opaque;
     int channel, access, addr;
     PITChannel *s;
@@ -875,6 +890,8 @@ static void pit_write(void *opaque, uint32_t offset,
 
 static uint32_t pit_read(void *opaque, uint32_t offset, int size_log2)
 {
+    (void)(size_log2);
+
     PITState *pit = opaque;
     PITChannel *s;
     int ret, count, addr;
@@ -916,6 +933,9 @@ static uint32_t pit_read(void *opaque, uint32_t offset, int size_log2)
 static void speaker_write(void *opaque, uint32_t offset,
                           uint32_t val, int size_log2)
 {
+    (void)(offset);
+    (void)(size_log2);
+
     PITState *pit = opaque;
     pit->speaker_data_on = (val >> 1) & 1;
     pit->pit_channels[2].gate = val & 1;
@@ -923,6 +943,8 @@ static void speaker_write(void *opaque, uint32_t offset,
 
 static uint32_t speaker_read(void *opaque, uint32_t offset, int size_log2)
 {
+    (void)(offset);
+    (void)(size_log2);
     PITState *pit = opaque;
     PITChannel *s;
     int out, val;
@@ -1095,6 +1117,8 @@ Serial.prototype.write_tx_fifo = function()
 static void serial_write(void *opaque, uint32_t offset,
                          uint32_t val, int size_log2)
 {
+    (void)(size_log2);
+
     SerialState *s = opaque;
     int addr;
 
@@ -1170,6 +1194,7 @@ static void serial_write(void *opaque, uint32_t offset,
 
 static uint32_t serial_read(void *opaque, uint32_t offset, int size_log2)
 {
+    (void)(size_log2);
     SerialState *s = opaque;
     int ret, addr;
 
@@ -1317,20 +1342,34 @@ static void copy_kernel(PCMachine *s, const uint8_t *buf, int buf_len,
 static void port80_write(void *opaque, uint32_t offset,
                          uint32_t val64, int size_log2)
 {
+    (void)(opaque);
+    (void)(offset);
+    (void)(val64);
+    (void)(size_log2);
 }
 
 static uint32_t port80_read(void *opaque, uint32_t offset, int size_log2)
 {
+    (void)(opaque);
+    (void)(offset);
+    (void)(size_log2);
     return 0xff;
 }
 
 static void port92_write(void *opaque, uint32_t offset,
                          uint32_t val, int size_log2)
 {
+    (void)(opaque);
+    (void)(offset);
+    (void)(val);
+    (void)(size_log2);
 }
 
 static uint32_t port92_read(void *opaque, uint32_t offset, int size_log2)
 {
+    (void)(opaque);
+    (void)(offset);
+    (void)(size_log2);
     int a20 = 1; /* A20=0 is not supported */
     return a20 << 1;
 }
@@ -1345,6 +1384,8 @@ static uint32_t port92_read(void *opaque, uint32_t offset, int size_log2)
 
 static uint32_t vmport_read(void *opaque, uint32_t addr, int size_log2)
 {
+    (void)(addr);
+    (void)(size_log2);
     PCMachine *s = opaque;
     uint32_t regs[6];
 
@@ -1401,6 +1442,10 @@ static uint32_t vmport_read(void *opaque, uint32_t addr, int size_log2)
 static void vmport_write(void *opaque, uint32_t addr, uint32_t val,
                          int size_log2)
 {
+    (void)(opaque);
+    (void)(addr);
+    (void)(val);
+    (void)(size_log2);
 }
 
 static void pic_set_irq_cb(void *opaque, int level)
@@ -1425,6 +1470,7 @@ static int get_hard_intno_cb(void *opaque)
 
 static int64_t pit_get_ticks_cb(void *opaque)
 {
+    (void)(opaque);
     struct timespec ts;
 
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -1942,6 +1988,8 @@ static uint64_t cpu_get_tsc(void *opaque)
 
 static uint64_t cpu_get_tsc(void *opaque)
 {
+    (void)(opaque);
+
     struct timespec ts;
 
     clock_gettime(CLOCK_MONOTONIC, &ts);

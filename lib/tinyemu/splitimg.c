@@ -27,6 +27,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <getopt.h>
+#include <assert.h>
 
 int main(int argc, char **argv)
 {
@@ -55,11 +56,16 @@ int main(int argc, char **argv)
     blocksize *= 1024;
     
     buf = malloc(blocksize);
+    assert(buf);
 
     f = fopen(infilename, "rb");
     if (!f) {
         perror(infilename);
         exit(1);
+    }
+    if (setvbuf(f, NULL, _IOFBF, 1024 * 8) != 0)
+    {
+        perror ("setvbuf");
     }
     i = 0;
     for(;;) {
@@ -80,6 +86,10 @@ int main(int argc, char **argv)
             perror(buf1);
             exit(1);
         }
+        if (setvbuf(f, NULL, _IOFBF, 1024 * 8) != 0)
+        {
+            perror ("setvbuf");
+        }
         fwrite(buf, 1, blocksize, fo);
         fclose(fo);
         i++;
@@ -92,6 +102,10 @@ int main(int argc, char **argv)
     if (!fo) {
         perror(buf1);
         exit(1);
+    }
+    if (setvbuf(fo, NULL, _IOFBF, 1024 * 8) != 0)
+    {
+        perror ("setvbuf");
     }
     fprintf(fo, "{\n");
     fprintf(fo, "  block_size: %d,\n", blocksize / 1024);

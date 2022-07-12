@@ -52,6 +52,7 @@ char *compose_path(const char *path, const char *name)
         path_len = strlen(path);
         name_len = strlen(name);
         d = malloc(path_len + 1 + name_len + 1);
+        assert(d);
         q = d;
         memcpy(q, path, path_len);
         q += path_len;
@@ -100,6 +101,7 @@ char *quoted_str(const char *str)
     return strdup(str);
  use_quote:
     buf = malloc(strlen(str) * 4 + 2 + 1);
+    assert(buf);
     q = buf;
     s = str;
     *q++ = '"';

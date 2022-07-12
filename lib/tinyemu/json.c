@@ -203,6 +203,7 @@ JSONValue json_string_new2(const char *str, int len)
     JSONString *str1;
 
     str1 = malloc(sizeof(JSONString) + len + 1);
+    assert(str1);
     str1->len = len;
     memcpy(str1->data, str, len + 1);
     val.type = JSON_STR;
@@ -456,6 +457,7 @@ JSONValue json_parse_value_len(const char *p, int len)
     char *str;
     JSONValue val;
     str = malloc(len + 1);
+    assert(str);
     memcpy(str, p, len);
     str[len] = '\0';
     val = json_parse_value(str);

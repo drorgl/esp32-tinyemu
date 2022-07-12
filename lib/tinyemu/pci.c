@@ -533,6 +533,7 @@ I440FXState *i440fx_init(PCIBus **pbus, int *ppiix3_devfn,
         irq_init(&b->irq[i], i440fx_set_irq, s, i);
     }
     
+    printf("Registering i440fx\r\n");
     cpu_register_device(port_map, 0xcf8, 1, s, i440fx_read_addr, i440fx_write_addr, 
                         DEVIO_SIZE32);
     cpu_register_device(port_map, 0xcfc, 4, s, i440fx_read_data, i440fx_write_data, 

@@ -400,6 +400,7 @@ static void ide_sector_read(IDEState *s)
 
 static void ide_sector_read_cb(void *opaque, int ret)
 {
+    (void)(ret);
     IDEState *s = opaque;
     int n;
     EndTransferFunc *func;
@@ -714,6 +715,7 @@ static void ide_cmd_write(void *opaque, uint32_t offset,
 static void ide_data_writew(void *opaque, uint32_t offset,
                             uint32_t val, int size_log2)
 {
+    (void)(size_log2);
     IDEIFState *s1 = opaque;
     IDEState *s = s1->cur_drive;
     int p;
@@ -733,6 +735,8 @@ static void ide_data_writew(void *opaque, uint32_t offset,
 
 static uint32_t ide_data_readw(void *opaque, uint32_t offset, int size_log2)
 {
+    (void)(offset);
+    (void)(size_log2);
     IDEIFState *s1 = opaque;
     IDEState *s = s1->cur_drive;
     int p, ret;
@@ -759,6 +763,7 @@ static IDEState *ide_drive_init(IDEIFState *ide_if, BlockDevice *bs)
     uint64_t nb_sectors;
 
     s = malloc(sizeof(*s));
+    assert(s);
     memset(s, 0, sizeof(*s));
 
     s->ide_if = ide_if;
@@ -803,16 +808,19 @@ IDEIFState *ide_init(PhysMemoryMap *port_map, uint32_t addr, uint32_t addr2,
     IDEIFState *s;
     
     s = malloc(sizeof(IDEIFState));
+    assert(s);
     memset(s, 0, sizeof(*s));
     
     s->irq = irq;
     s->cmd = 0;
-
+    printf("Registering IDE Data\r\n");
     cpu_register_device(port_map, addr, 1, s, ide_data_readw, ide_data_writew, 
                         DEVIO_SIZE16);
+    printf("Registering IDE IO\r\n");
     cpu_register_device(port_map, addr + 1, 7, s, ide_ioport_read, ide_ioport_write, 
                         DEVIO_SIZE8);
     if (addr2) {
+        printf("Registering IDE Status\r\n");
         cpu_register_device(port_map, addr2, 1, s, ide_status_read, ide_cmd_write, 
                             DEVIO_SIZE8);
     }

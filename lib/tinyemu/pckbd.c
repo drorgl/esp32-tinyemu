@@ -106,6 +106,7 @@ static void qemu_system_reset_request(void)
 
 static void ioport_set_a20(int val)
 {
+    (void)(val);
 }
 
 static int ioport_get_a20(void)
@@ -164,6 +165,8 @@ static void kbd_update_aux_irq(void *opaque, int level)
 
 static uint32_t kbd_read_status(void *opaque, uint32_t addr, int size_log2)
 {
+    (void)(addr);
+    (void)(size_log2);
     KBDState *s = opaque;
     int val;
     val = s->status;
@@ -184,6 +187,8 @@ static void kbd_queue(KBDState *s, int b, int aux)
 static void kbd_write_command(void *opaque, uint32_t addr, uint32_t val,
                               int size_log2)
 {
+    (void)(addr);
+    (void)(size_log2);
     KBDState *s = opaque;
 
 #if defined(DEBUG_KBD)
@@ -256,6 +261,8 @@ static void kbd_write_command(void *opaque, uint32_t addr, uint32_t val,
 
 static uint32_t kbd_read_data(void *opaque, uint32_t addr, int size_log2)
 {
+    (void)(addr);
+    (void)(size_log2);
     KBDState *s = opaque;
     uint32_t val;
     if (s->pending == KBD_PENDING_AUX)
@@ -270,6 +277,8 @@ static uint32_t kbd_read_data(void *opaque, uint32_t addr, int size_log2)
 
 static void kbd_write_data(void *opaque, uint32_t addr, uint32_t val, int size_log2)
 {
+    (void)(addr);
+    (void)(size_log2);
     KBDState *s = opaque;
 
 #ifdef DEBUG_KBD
@@ -328,6 +337,7 @@ KBDState *i8042_init(PS2KbdState **pkbd,
     s->irq_mouse = mouse_irq;
 
     kbd_reset(s);
+    printf("Registering KBD\r\n");
     cpu_register_device(port_map, io_base, 1, s, kbd_read_data, kbd_write_data, 
                         DEVIO_SIZE8);
     cpu_register_device(port_map, io_base + 4, 1, s, kbd_read_status, kbd_write_command, 

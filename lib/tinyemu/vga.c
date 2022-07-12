@@ -609,10 +609,12 @@ static void vga_ioport_write(VGAState *s, uint32_t addr, uint32_t val)
 #define VGA_IO(base) \
 static uint32_t vga_read_ ## base(void *opaque, uint32_t addr, int size_log2)\
 {\
+    (void)(size_log2);\
     return vga_ioport_read(opaque, base + addr);\
 }\
 static void vga_write_ ## base(void *opaque, uint32_t addr, uint32_t val, int size_log2)\
 {\
+    (void)(size_log2);\
     return vga_ioport_write(opaque, base + addr, val);\
 }
 
@@ -779,7 +781,7 @@ VGAState *pci_vga_init(PCIBus *bus, FBDevice *fb_dev,
     s->vga_ram = s->mem_range2->phys_mem;
         
     /* standard VGA ports */
-    
+    printf("Registering VGA\r\n");
     cpu_register_device(port_map, 0x3c0, 16, s, vga_read_0x3c0, vga_write_0x3c0,
                         DEVIO_SIZE8);
     cpu_register_device(port_map, 0x3b4, 2, s, vga_read_0x3b4, vga_write_0x3b4,
@@ -792,6 +794,7 @@ VGAState *pci_vga_init(PCIBus *bus, FBDevice *fb_dev,
                         DEVIO_SIZE8);
     
     /* VBE extension */
+    printf("Registering VBE\r\n");
     cpu_register_device(port_map, 0x1ce, 2, s, vbe_read, vbe_write, 
                         DEVIO_SIZE16);
     
