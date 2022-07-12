@@ -1,6 +1,6 @@
 /*
  * TinyEMU
- *
+ * 
  * Copyright (c) 2016-2018 Fabrice Bellard
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -32,11 +32,19 @@
 #include <unistd.h>
 #include <time.h>
 #include <getopt.h>
+#include <virtual_directory.h>
+#include <log.h>
 #ifndef _WIN32
 #include <termios.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
+
+
+
+#if !defined(_WIN32) && !defined(ESP32)
 #include <linux/if_tun.h>
+#endif
+
 #endif
 #include <sys/stat.h>
 #include <signal.h>
@@ -53,7 +61,27 @@
 #include "slirp/libslirp.h"
 #endif
 
-#ifndef _WIN32
+#ifdef ESP32
+#include "sd_mount.h"
+#include <sys/time.h>
+#include <lwip/sockets.h>
+struct winsize
+{
+    unsigned short ws_row;    /* rows, in characters */
+    unsigned short ws_col;    /* columns, in characters */
+    unsigned short ws_xpixel; /* horizontal size, pixels */
+    unsigned short ws_ypixel; /* vertical size, pixels */
+};
+
+#define TIOCGWINSZ 0x5413
+
+#endif
+
+#ifdef _WIN32
+#include <simpleconsole.h>
+#elif defined (ESP32)
+#include <uartconsole.h>
+#else
 
 typedef struct
 {
@@ -205,7 +233,9 @@ CharacterDevice *console_init(BOOL allow_ctrlc)
     sig.sa_handler = term_resize_handler;
     sigemptyset(&sig.sa_mask);
     sig.sa_flags = 0;
+#if !defined(_WIN32) && !defined(ESP32)
     sigaction(SIGWINCH, &sig, NULL);
+#endif
 
     dev->opaque = s;
     dev->write_data = console_write;
@@ -244,6 +274,8 @@ static int bf_read_async(BlockDevice *bs,
                          uint64_t sector_num, uint8_t *buf, int n,
                          BlockDeviceCompletionFunc *cb, void *opaque)
 {
+    (void)(cb);
+    (void)(opaque);
     BlockDeviceFile *bf = bs->opaque;
     //    printf("bf_read_async: sector_num=%" PRId64 " n=%d\n", sector_num, n);
 #ifdef DUMP_BLOCK_READ
@@ -263,8 +295,12 @@ static int bf_read_async(BlockDevice *bs,
         {
             if (!bf->sector_table[sector_num])
             {
-                fseek(bf->f, sector_num * SECTOR_SIZE, SEEK_SET);
-                fread(buf, 1, SECTOR_SIZE, bf->f);
+                if (fseek(bf->f, sector_num * SECTOR_SIZE, SEEK_SET) != 0){
+                    printf("error seeking\r\n");
+                }
+                if (fread(buf, 1, SECTOR_SIZE, bf->f) != SECTOR_SIZE){
+                    printf("error fread()\r\n");
+                }
             }
             else
             {
@@ -276,8 +312,12 @@ static int bf_read_async(BlockDevice *bs,
     }
     else
     {
-        fseek(bf->f, sector_num * SECTOR_SIZE, SEEK_SET);
-        fread(buf, 1, n * SECTOR_SIZE, bf->f);
+        if (fseek(bf->f, sector_num * SECTOR_SIZE, SEEK_SET) != 0){
+            printf("error seeking1()\r\n");
+        }
+        if (fread(buf, 1, n * SECTOR_SIZE, bf->f) != n * SECTOR_SIZE){
+            printf("error reading()1\r\n");
+        }
     }
     /* synchronous read */
     return 0;
@@ -287,6 +327,7 @@ static int bf_write_async(BlockDevice *bs,
                           uint64_t sector_num, const uint8_t *buf, int n,
                           BlockDeviceCompletionFunc *cb, void *opaque)
 {
+    (void)(opaque);
     BlockDeviceFile *bf = bs->opaque;
     int ret;
 
@@ -296,8 +337,12 @@ static int bf_write_async(BlockDevice *bs,
         ret = -1; /* error */
         break;
     case BF_MODE_RW:
-        fseek(bf->f, sector_num * SECTOR_SIZE, SEEK_SET);
-        fwrite(buf, 1, n * SECTOR_SIZE, bf->f);
+        if (fseek(bf->f, sector_num * SECTOR_SIZE, SEEK_SET) != 0){
+            printf("error seeking3()\r\n");
+        }
+        if (fwrite(buf, 1, n * SECTOR_SIZE, bf->f) != n * SECTOR_SIZE){
+            printf("error writing()\r\n");
+        }
         ret = 0;
         break;
     case BF_MODE_SNAPSHOT:
@@ -310,6 +355,7 @@ static int bf_write_async(BlockDevice *bs,
             if (!bf->sector_table[sector_num])
             {
                 bf->sector_table[sector_num] = malloc(SECTOR_SIZE);
+                assert(bf->sector_table[sector_num]);
             }
             memcpy(bf->sector_table[sector_num], buf, SECTOR_SIZE);
             sector_num++;
@@ -343,13 +389,23 @@ static BlockDevice *block_device_init(const char *filename,
         mode_str = "rb";
     }
 
-    f = fopen(filename, mode_str);
+    char fullpath[256];
+    vd_cwd(fullpath, sizeof(fullpath));
+    strncat(fullpath, filename, sizeof(fullpath) - 1);
+
+    f = fopen(fullpath, mode_str);
     if (!f)
     {
-        perror(filename);
+        perror(fullpath);
         exit(1);
     }
-    fseek(f, 0, SEEK_END);
+    if (setvbuf(f, NULL, _IOFBF, 1024 * 8) != 0)
+    {
+        perror ("setvbuf");
+    }
+    if (fseek(f, 0, SEEK_END) != 0){
+        printf("error seeking4()\r\n");
+    }
     file_size = ftello(f);
 
     bs = mallocz(sizeof(*bs));
@@ -372,7 +428,7 @@ static BlockDevice *block_device_init(const char *filename,
     return bs;
 }
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(ESP32)
 
 typedef struct
 {
@@ -581,23 +637,31 @@ void virt_machine_run(VirtMachine *m)
     FD_ZERO(&wfds);
     FD_ZERO(&efds);
     fd_max = -1;
-#ifndef _WIN32
+    // #ifndef _WIN32
     if (m->console_dev && virtio_console_can_write_data(m->console_dev))
     {
         STDIODevice *s = m->console->opaque;
+#if !defined(_WIN32) && !defined(ESP32)
         stdin_fd = s->stdin_fd;
         FD_SET(stdin_fd, &rfds);
         fd_max = stdin_fd;
+#endif
 
         if (s->resize_pending)
         {
             int width, height;
+#ifdef _WIN32
+            simple_console_get_size(s, &width, &height);
+#elif defined (ESP32)
+            uart_console_get_size(s,  &width, &height);
+#else
             console_get_size(s, &width, &height);
+#endif
             virtio_console_resize_event(m->console_dev, width, height);
             s->resize_pending = FALSE;
         }
     }
-#endif
+    // #endif
     if (m->net)
     {
         m->net->select_fill(m->net, &fd_max, &rfds, &wfds, &efds, &delay);
@@ -606,16 +670,19 @@ void virt_machine_run(VirtMachine *m)
     fs_net_set_fdset(&fd_max, &rfds, &wfds, &efds, &delay);
 #endif
     tv.tv_sec = delay / 1000;
-    tv.tv_usec = (delay % 1000) * 1000;
+    tv.tv_usec = delay % 1000;
     ret = select(fd_max + 1, &rfds, &wfds, &efds, &tv);
     if (m->net)
     {
         m->net->select_poll(m->net, &rfds, &wfds, &efds, ret);
     }
+#if !defined(_WIN32) && !defined(ESP32)
     if (ret > 0)
+#endif
     {
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(ESP32)
         if (m->console_dev && FD_ISSET(stdin_fd, &rfds))
+#endif
         {
             uint8_t buf[128];
             int ret, len;
@@ -627,7 +694,7 @@ void virt_machine_run(VirtMachine *m)
                 virtio_console_write_data(m->console_dev, buf, ret);
             }
         }
-#endif
+        // #endif
     }
 
 #ifdef CONFIG_SDL
@@ -639,16 +706,16 @@ void virt_machine_run(VirtMachine *m)
 
 /*******************************************************/
 
-static struct option options[] = {
-    {"help", no_argument, NULL, 'h'},
-    {"ctrlc", no_argument},
-    {"rw", no_argument},
-    {"ro", no_argument},
-    {"append", required_argument},
-    {"no-accel", no_argument},
-    {"build-preload", required_argument},
-    {NULL},
-};
+// static struct option options[] = {
+//     {"help", no_argument, NULL, 'h'},
+//     {"ctrlc", no_argument},
+//     {"rw", no_argument},
+//     {"ro", no_argument},
+//     {"append", required_argument},
+//     {"no-accel", no_argument},
+//     {"build-preload", required_argument},
+//     {NULL},
+// };
 
 void help(void)
 {
@@ -664,7 +731,13 @@ void help(void)
            "\n"
            "Console keys:\n"
            "Press C-a x to exit the emulator, C-a h to get some help.\n");
+#ifndef ESP32
     exit(1);
+#else
+    while (1)
+    {
+    }
+#endif
 }
 
 #ifdef CONFIG_FS_NET
@@ -684,9 +757,16 @@ static BOOL net_poll_cb(void *arg)
 
 int main(int argc, char **argv)
 {
+    (void)(argc);
+
+    log_set_level(LOG_TRACE);
+    setvbuf(stdin, NULL, _IONBF, 0);
+    setvbuf(stdout, NULL, _IONBF, 0);
+
+    // log_set_level(LOG_DEBUG);
     VirtMachine *s;
     const char *path, *cmdline, *build_preload_file;
-    int c, option_index, i, ram_size, accel_enable;
+    int  i, ram_size, accel_enable; //option_index,c, 
     BOOL allow_ctrlc;
     BlockDeviceModeEnum drive_mode;
     VirtMachineParams p_s, *p = &p_s;
@@ -698,56 +778,56 @@ int main(int argc, char **argv)
     accel_enable = -1;
     cmdline = NULL;
     build_preload_file = NULL;
-    for (;;)
-    {
-        c = getopt_long_only(argc, argv, "hm:", options, &option_index);
-        if (c == -1)
-            break;
-        switch (c)
-        {
-        case 0:
-            switch (option_index)
-            {
-            case 1: /* ctrlc */
-                allow_ctrlc = TRUE;
-                break;
-            case 2: /* rw */
-                drive_mode = BF_MODE_RW;
-                break;
-            case 3: /* ro */
-                drive_mode = BF_MODE_RO;
-                break;
-            case 4: /* append */
-                cmdline = optarg;
-                break;
-            case 5: /* no-accel */
-                accel_enable = FALSE;
-                break;
-            case 6: /* build-preload */
-                build_preload_file = optarg;
-                break;
-            default:
-                fprintf(stderr, "unknown option index: %d\n", option_index);
-                exit(1);
-            }
-            break;
-        case 'h':
-            help();
-            break;
-        case 'm':
-            ram_size = strtoul(optarg, NULL, 0);
-            break;
-        default:
-            exit(1);
-        }
-    }
+    // for (;;)
+    // {
+    //     c = getopt_long_only(argc, argv, "hm:", options, &option_index);
+    //     if (c == -1)
+    //         break;
+    //     switch (c)
+    //     {
+    //     case 0:
+    //         switch (option_index)
+    //         {
+    //         case 1: /* ctrlc */
+    //             allow_ctrlc = TRUE;
+    //             break;
+    //         case 2: /* rw */
+    //             drive_mode = BF_MODE_RW;
+    //             break;
+    //         case 3: /* ro */
+    //             drive_mode = BF_MODE_RO;
+    //             break;
+    //         case 4: /* append */
+    //             cmdline = optarg;
+    //             break;
+    //         case 5: /* no-accel */
+    //             accel_enable = FALSE;
+    //             break;
+    //         case 6: /* build-preload */
+    //             build_preload_file = optarg;
+    //             break;
+    //         default:
+    //             fprintf(stderr, "unknown option index: %d\n", option_index);
+    //             exit(1);
+    //         }
+    //         break;
+    //     case 'h':
+    //         help();
+    //         break;
+    //     case 'm':
+    //         ram_size = (uint64_t)strtoul(optarg, NULL, 0);
+    //         break;
+    //     default:
+    //         exit(1);
+    //     }
+    // }
 
-    if (optind >= argc)
-    {
-        help();
-    }
+    // if (optind >= argc)
+    // {
+    //     help();
+    // }
 
-    path = argv[optind++];
+    path = argv[1];
 
     virt_machine_set_defaults(p);
 #ifdef CONFIG_FS_NET
@@ -762,7 +842,7 @@ int main(int argc, char **argv)
 
     if (ram_size > 0)
     {
-        p->ram_size = (uint64_t)ram_size << 20;
+        p->ram_size = ram_size << 20;
     }
     if (accel_enable != -1)
         p->accel_enable = accel_enable;
@@ -797,9 +877,9 @@ int main(int argc, char **argv)
 
     for (i = 0; i < p->fs_count; i++)
     {
-        FSDevice *fs;
-        const char *path;
-        path = p->tab_fs[i].filename;
+        // FSDevice *fs;
+        // const char *path;
+        // path = p->tab_fs[i].filename;
 #ifdef CONFIG_FS_NET
         if (is_url(path))
         {
@@ -812,23 +892,23 @@ int main(int argc, char **argv)
         }
         else
 #endif
-        {
-#ifdef _WIN32
-            fprintf(stderr, "Filesystem access not supported yet\n");
-            exit(1);
-#else
-            char *fname;
-            fname = get_file_path(p->cfg_filename, path);
-            fs = fs_disk_init(fname);
-            if (!fs)
-            {
-                fprintf(stderr, "%s: must be a directory\n", fname);
-                exit(1);
-            }
-            free(fname);
-#endif
-        }
-        p->tab_fs[i].fs_dev = fs;
+//         {
+// #if defined(_WIN32) || defined(ESP32)
+//             fprintf(stderr, "Filesystem access not supported yet\n");
+//             exit(1);
+// #else
+//             char *fname;
+//             fname = get_file_path(p->cfg_filename, path);
+//             fs = fs_disk_init(fname);
+//             if (!fs)
+//             {
+//                 fprintf(stderr, "%s: must be a directory\n", fname);
+//                 exit(1);
+//             }
+//             free(fname);
+// #endif
+//         }
+//         p->tab_fs[i].fs_dev = fs;
     }
 
     for (i = 0; i < p->eth_count; i++)
@@ -842,7 +922,7 @@ int main(int argc, char **argv)
         }
         else
 #endif
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(ESP32)
             if (!strcmp(p->tab_eth[i].driver, "tap"))
         {
             p->tab_eth[i].net = tun_open(p->tab_eth[i].ifname);
@@ -867,8 +947,11 @@ int main(int argc, char **argv)
 #endif
     {
 #ifdef _WIN32
-        fprintf(stderr, "Console not supported yet\n");
-        exit(1);
+        // fprintf(stderr, "Console not supported yet\n");
+        // exit(1);
+        p->console = simple_console_init(allow_ctrlc);
+#elif defined(ESP32)
+        p->console = uart_console_init(allow_ctrlc);
 #else
         p->console = console_init(allow_ctrlc);
 #endif
@@ -893,3 +976,18 @@ int main(int argc, char **argv)
     virt_machine_end(s);
     return 0;
 }
+
+#ifdef ESP32
+void app_main()
+{
+    mount_sd_sdmmc();
+    const char *args[] = {
+        "",
+        "root-riscv32.cfg"};
+    main(2, args);
+    printf("exiting emulator\r\n");
+    while (true)
+    {
+    }
+}
+#endif

@@ -14,7 +14,8 @@
             "-<riscv_cpu.c>",
             "-<block_net.c>",
             "-<sdl.c>",
-            "-<slirp>"
+            "-<slirp>",
+            "-<temu.c>"
         ]
     },
     "license":"MIT",
