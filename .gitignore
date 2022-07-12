@@ -4,3 +4,4 @@
 .vscode/launch.json
 .vscode/settings.json
 pagefile*.bin
+sdkconfig.esp32.old
