@@ -3,6 +3,14 @@
 
 #include <virtual_directory.h>
 
+void setUp()
+{
+}
+void tearDown()
+{
+}
+
+
 void chdir_when_changing_to_subdirectory_the_full_path_should_be_in_the_subdirectory()
 {
     const char * home_cwd = "/home";
