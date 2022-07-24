@@ -38,7 +38,11 @@ void mount_sd_spi()
         .quadhd_io_num = -1,
         .max_transfer_sz = 4000,
     };
+#ifdef ESP32S3
+    esp_err_t ret = spi_bus_initialize(host.slot, &bus_cfg, SPI_DMA_CH_AUTO);
+#else
     esp_err_t ret = spi_bus_initialize(host.slot, &bus_cfg, SPI_DMA_CHAN);
+#endif
     if (ret != ESP_OK)
     {
         ESP_LOGE(TAG, "Failed to initialize bus.");
