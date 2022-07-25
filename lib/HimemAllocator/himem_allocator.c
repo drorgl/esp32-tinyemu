@@ -4,7 +4,7 @@
 
 #include "himem_access/himem_base.h"
 
-#ifdef ESP32
+#if (defined(ESP32) && !defined(ESP32S3))
 #include "himem_access/esp32_himem.h"
 const himem_base *himem = &esp32_himem;
 #else
