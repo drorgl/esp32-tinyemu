@@ -828,6 +828,7 @@ static int riscv_build_fdt(RISCVMachine *m, uint8_t *dst,
 
 
 static void load_file_to_vmm(VMM_t *vmm, const char * filename, uint32_t address, uint32_t * read_size){
+    printf("Loading %s to %" PRIu32 "\n", filename, address);
     char fullpath[256];
     vd_cwd(fullpath, sizeof(fullpath));
     strncat(fullpath,filename, sizeof(fullpath)-1);

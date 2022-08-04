@@ -64,7 +64,7 @@ static void stdout_callback(log_Event *ev) {
     buf, level_strings[ev->level], ev->file, ev->line);
 #endif
   vfprintf(ev->udata, ev->fmt, ev->ap);
-  fprintf(ev->udata, "\r\n");
+  fprintf(ev->udata, "\n");
   fflush(ev->udata);
 }
 
@@ -148,7 +148,7 @@ void log_log(int level, const char *file, int line, const char *fmt, ...) {
   lock();
 
   if (!L.quiet && level >= L.level) {
-    init_event(&ev, stderr);
+    init_event(&ev, stdout);
     va_start(ev.ap, fmt);
     stdout_callback(&ev);
     va_end(ev.ap);

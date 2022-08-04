@@ -31,6 +31,10 @@ OTHER DEALINGS IN THE SOFTWARE.
         #define INLINE extern inline
     #elif __linux__
         #define INLINE static inline
+    #elif __MINGW32__
+        #define INLINE static inline
+    #elif ESP_PLATFORM
+        #define INLINE static inline
     #else
         #define INLINE
     #endif

@@ -85,6 +85,7 @@ static uint16_t esp32_himem_get_superblocks_needed(uint16_t block_size, uint16_t
 static himem_allocator_t *esp32_himem_init(uint16_t block_size, uint16_t blocks)
 {
     himem_allocator_t *allocator = (himem_allocator_t *)malloc(sizeof(himem_allocator_t));
+    assert(allocator);
     allocator->mapped =false;
     allocator->ptr = NULL;
 
@@ -159,22 +160,16 @@ static void map_superblock(himem_allocator_t * allocator, size_t superblock_id)
     }
 }
 
-void myMemCpy(void *dest, void *src, size_t n)
-{
-    // Typecast src and dest addresses to (char *)
-    char *csrc = (char *)src;
-    char *cdest = (char *)dest;
-
-    // Copy contents of src[] to dest[]
-    for (int i = 0; i < n; i++)
-        cdest[i] = csrc[i];
-}
-
-static size_t esp32_himem_read(himem_allocator_t * allocator,const uint16_t block_id, void *buf, const size_t len)
+static size_t esp32_himem_read(himem_allocator_t * allocator,const uint16_t block_id, size_t read_offset, void *buf, const size_t len)
 {
     if (len > allocator->_block_size)
     {
         // throw exeption(out of bound);
+        return 0;
+    }
+
+    if ((len + read_offset ) > allocator->_block_size){
+        //show error
         return 0;
     }
 
@@ -183,15 +178,19 @@ static size_t esp32_himem_read(himem_allocator_t * allocator,const uint16_t bloc
 
     map_superblock(allocator,superblock_id);
     ESP_LOGD(TAG, "reading offset %d in 0x%x %d bytes, ptr 0x%x", offset_in_superblock, (uintptr_t)allocator->ptr + offset_in_superblock, len, (uintptr_t)allocator->ptr);
-    memcpy(buf, allocator->ptr + offset_in_superblock, len);
-    // myMemCpy(buf, ptr + offset_in_superblock, len);
+    memcpy(buf, allocator->ptr + offset_in_superblock + read_offset, len);
     return len;
 }
-static size_t esp32_himem_write(himem_allocator_t * allocator,const uint16_t block_id, const void *buf, const size_t len)
+static size_t esp32_himem_write(himem_allocator_t * allocator,const uint16_t block_id, size_t write_offset, const void *buf, const size_t len)
 {
     if (len > allocator->_block_size)
     {
         // throw exeption(out of bound);
+        return 0;
+    }
+
+    if ((len + write_offset ) > allocator->_block_size){
+        //show error
         return 0;
     }
 
@@ -200,7 +199,7 @@ static size_t esp32_himem_write(himem_allocator_t * allocator,const uint16_t blo
 
     map_superblock(allocator,superblock_id);
     ESP_LOGD(TAG, "writing offset %d 0x%x %d bytes, ptr 0x%x", offset_in_superblock, (uintptr_t)allocator->ptr + offset_in_superblock, len, (uintptr_t)allocator->ptr);
-    memcpy(allocator->ptr + offset_in_superblock, buf, len);
+    memcpy(allocator->ptr + offset_in_superblock + write_offset, buf, len);
     return len;
 }
 static void esp32_himem_deinit(himem_allocator_t * allocator)

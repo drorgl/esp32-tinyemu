@@ -5,3 +5,5 @@
 .vscode/settings.json
 pagefile*.bin
 sdkconfig.esp32.old
+result.txt
+testpagefile*.bin

@@ -44,6 +44,12 @@ int call_app_main()
 #else
 
 #define MAIN() \
-int main(int argc, char **argv)
+int call_app_main();\
+int main(int argc, char **argv){\
+    (void)(argc);\
+    (void)(argv);\
+    return call_app_main();\
+}\
+int call_app_main()
 
 #endif

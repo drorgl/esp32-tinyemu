@@ -121,25 +121,32 @@ static PhysMemoryRange *default_register_ram(PhysMemoryMap *s, uint64_t addr,
     vd_cwd(fullpath, sizeof(fullpath));
     strncat(fullpath, filename, sizeof(fullpath)-1);
 
-    uint32_t vmm_pages = 0;
 
-    if (size< 1024 * 1024) {
-        vmm_pages = (128 * 1024) / (16*1024);
-    } else {
-        vmm_pages = (2 * 1024 * 1024) / (16 * 1024);
-    }
+    //Available 4 MB = 4194304 bytes, 4096 page, 1000 pages = 4096000 bytes
+    size_t himem_page_size = 4096;
+    size_t himem_pages = 1000;
 
-    //testing new indexer
-    vmm_pages = 380;
-    uint32_t vmm_page_size = 1024 * 8;
+    //Available 3.5 MB - 3670016 bytes, 2048 page, 1700 pages = 3481600 bytes
+    size_t psram_page_size = 2048;
+    size_t psram_pages = 1700;
 
-    size_t maxiumum_blocks = 500;
+    // Available 75k - 76800 bytes, 1024 page, 75 pages
+    size_t ram_page_size = 1024;
+    size_t ram_pages = 75;
+
+    //bios, 128k is enough
     if (addr == 0){
-        maxiumum_blocks = 15; //bios doesn't need more than 128k
-        vmm_pages = 200;
+        himem_page_size = 4096;
+        himem_pages = 32;
+
+        psram_page_size = 4096;
+        psram_pages = 32;
+
+        ram_page_size = 1024;
+        ram_pages = 16;
     }
 
-    pr->vmm = vmm_create(fullpath, size, vmm_page_size, vmm_pages, maxiumum_blocks);
+    pr->vmm = vmm_create(fullpath, size, himem_page_size,himem_pages, psram_page_size, psram_pages, ram_page_size, ram_pages);
     assert(pr->vmm && "VMM not created");
 
     printf("Registered RAM 0x%" PRIx64 ": %" PRIu64 " bytes at 0x%p\r\n", addr,size, pr->phys_mem );

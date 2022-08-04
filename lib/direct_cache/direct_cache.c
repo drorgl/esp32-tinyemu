@@ -2,6 +2,11 @@
 
 #include <stdint.h>
 #include <malloc.h>
+#include <assert.h>
+
+#ifdef ESP32
+#include <esp_heap_caps.h>
+#endif
 
 struct cache_line
 {
@@ -19,9 +24,14 @@ direct_cache_t *direct_cache_init(size_t cache_size)
 {
     direct_cache_t *cache = (direct_cache_t *)malloc(sizeof(direct_cache_t));
     cache->cache_size = cache_size;
+#ifdef ESP32
+    cache->cache = heap_caps_malloc(sizeof(struct cache_line) * cache_size, MALLOC_CAP_INTERNAL);
+#else
     cache->cache = (struct cache_line *)malloc(sizeof(struct cache_line) * cache_size);
+#endif
+    assert(cache->cache);
     for (size_t i = 0; i < cache_size;i++){
-        cache->cache[i].key = i + 1;
+        cache->cache[i].key = (void*)i + 1;
     }
     return cache;
 }
@@ -47,7 +57,7 @@ void direct_cache_set(direct_cache_t *cache, void *key, void *value)
 void direct_cache_remove(direct_cache_t *cache, void *key)
 {
     uint16_t cell = (intptr_t)(key) % cache->cache_size;
-    cache->cache[cell].key = cell + 1;
+    cache->cache[cell].key = (void*) cell + 1;
     cache->cache[cell].value = NULL;
 }
 

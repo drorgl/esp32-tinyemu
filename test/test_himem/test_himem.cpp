@@ -56,19 +56,19 @@ void test_himem(size_t block_size = 1024, size_t desired_blocks = 1000)
     int seed = 0xaaaa;
 
     uint16_t total_blocks = desired_blocks;
-    himem_t * allocator = himem_allocator_init(block_size, desired_blocks);
+    himem_t *allocator = himem_allocator_init(block_size, desired_blocks);
     void *buf = malloc(block_size);
     for (int i = 0; i < total_blocks; i++)
     {
         // printf("writing block %d\n", i);
         fill_mem_seed(i ^ seed, buf, block_size);
-        himem_write(allocator,i, buf, block_size);
+        himem_write(allocator, i, 0, buf, block_size);
     }
 
     for (int i = 0; i < total_blocks; i++)
     {
         // printf("verifying block %d\n", i);
-        himem_read(allocator,i, buf, block_size);
+        himem_read(allocator, i, 0, buf, block_size);
         if (!check_mem_seed(i ^ seed, buf, block_size, i * block_size))
         {
             printf("Error in block %d\n", i);
@@ -86,7 +86,6 @@ void test_himem_1024_1000()
     test_himem(1024, 1000);
 }
 
-
 void test_himem_4096_1000()
 {
     test_himem(1024, 1000);
@@ -97,6 +96,43 @@ void test_himem_16384_1000()
     test_himem(16384, 1000);
 }
 
+void test_himem_block_allocation()
+{
+    himem_t *allocator = himem_allocator_init(1024, 100);
+    printf("1available %d\n", himem_free_blocks(allocator));
+    for (int i = 0; i < 100; i++)
+    {
+        int16_t block_id = himem_allocate_block(allocator);
+        printf("2available %d\n", himem_free_blocks(allocator));
+        himem_free_block(allocator, block_id);
+        printf("3available %d\n", himem_free_blocks(allocator));
+        TEST_ASSERT_EQUAL(100, himem_free_blocks(allocator));
+    }
+    himem_allocator_deinit(allocator);
+}
+
+void test_himem_block_allocation_all()
+{
+    himem_t *allocator = himem_allocator_init(1024, 100);
+    int16_t block_ids[100];
+    printf("1available %d\n", himem_free_blocks(allocator));
+    for (int i = 0; i < 100; i++)
+    {
+        int16_t block_id = himem_allocate_block(allocator);
+        block_ids[i] = block_id;
+        printf("2available %d\n", himem_free_blocks(allocator));
+    }
+
+    for (int i = 0; i < 100; i++)
+    {
+        int16_t block_id = block_ids[i];
+        himem_free_block(allocator, block_id);
+        printf("3available %d\n", himem_free_blocks(allocator));
+    }
+
+    TEST_ASSERT_EQUAL(100, himem_free_blocks(allocator));
+    himem_allocator_deinit(allocator);
+}
 
 void process()
 {
@@ -104,10 +140,13 @@ void process()
     RUN_TEST(test_himem_1024_1000);
     RUN_TEST(test_himem_4096_1000);
     RUN_TEST(test_himem_16384_1000);
+    RUN_TEST(test_himem_block_allocation);
+    RUN_TEST(test_himem_block_allocation_all);
     UNITY_END();
 }
 
 MAIN()
 {
     process();
+    return 0;
 }

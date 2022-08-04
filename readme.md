@@ -46,6 +46,16 @@ The arguments for running temu on ESP32 are hardcoded to ```root-riscv32.cfg``` 
 # How to build your own linux
 Please see [buildroot-tinyemu](https://github.com/drorgl/buildroot-tinyemu)
 
+# Changes in layered_cache branch
+
+New caching scheme where there are 4 layers
+- file system for storing the page file
+- himem for storing cache pages before they go to page file - slow read and write since it needs the mmu to change the pages mapped.
+- psram for storing smaller pages and act as a cache for the faster internal memory
+- internal ram for quicker cache
+
+Unfortunately no improvements, but this branch is kept for educational purposes
+
 # References
 * [TinyEMU](https://bellard.org/tinyemu/)
 * [TinyEMU Technical Documentation](https://bellard.org/tinyemu/readme.txt)
