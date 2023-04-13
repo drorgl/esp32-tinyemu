@@ -21,6 +21,8 @@ It uses virtual memory based on files to provide the emulator with desired RAM.
 * 3:20 more to run init and get to bash
 * 24 more seconds to finish ```ls -l``` in the root
 
+Update 2023-04-13: Reduced by %40, about 1:50 seconds to get to bash from power up, 12 seconds for `ls -l`.
+
 Currently there's no support for networking but it should be pretty easy to implement, though I'm not sure how functional its going to be given the above stellar execution time.
 
 Compile and Upload to ESP32

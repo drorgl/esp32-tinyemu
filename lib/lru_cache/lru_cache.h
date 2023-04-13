@@ -2,6 +2,8 @@
 
 #include <stddef.h>
 
+#define LRU_MARKING 100
+
 struct _cache_t;
 typedef struct _cache_t cache_t;
 

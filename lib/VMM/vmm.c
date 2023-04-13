@@ -24,13 +24,13 @@
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
-static uint64_t get_page_number_by_address(VMM_t *vmm, uint64_t address);
+static size_t get_page_number_by_address(VMM_t *vmm, size_t address);
 
-static vmTable_t *get_TLB(VMM_t *vmm, uint64_t page_number);
+static vmTable_t *get_TLB(VMM_t *vmm, size_t page_number);
 
-static void backing_store_write(VMM_t *vmm, uint64_t page_number, const uint8_t *buf, const uint64_t buf_len);
+static void backing_store_write(VMM_t *vmm, size_t page_number, const uint8_t *buf, const size_t buf_len);
 
-static void backing_store_read(VMM_t *vmm, uint64_t page_number, uint8_t *buf, const uint64_t buf_len);
+static void backing_store_read(VMM_t *vmm, size_t page_number, uint8_t *buf, const size_t buf_len);
 
 static void free_vmtable(VMM_t *vmm, vmTable_t *entry);
 
@@ -38,17 +38,17 @@ static vmTable_t *new_vmtable(VMM_t *vmm);
 
 static vmTable_t *find_empty_TLB(VMM_t *vmm);
 
-static void load_page(VMM_t *vmm, uint64_t page_number, vmTable_t *page);
+static void load_page(VMM_t *vmm, size_t page_number, vmTable_t *page);
 
-VMM_t *vmm_create(const char *pagefile, uint64_t maximum_size, uint64_t page_size, uint64_t number_of_pages, size_t maximum_himem_blocks);
+VMM_t *vmm_create(const char *pagefile, size_t maximum_size, size_t page_size, size_t number_of_pages, size_t maximum_himem_blocks);
 
 void vmm_destroy(VMM_t *vmm);
 
-void vmm_read(VMM_t *vmm, uint64_t addr, void *target, uint64_t len);
+void vmm_read(VMM_t *vmm, size_t addr, void *target, size_t len);
 
-void vmm_write(VMM_t *vmm, const uint64_t addr, const void *source, const uint64_t len);
+void vmm_write(VMM_t *vmm, const size_t addr, const void *source, const size_t len);
 
-static vmTable_t *get_page(VMM_t *vmm, uint64_t addr);
+static vmTable_t *get_page(VMM_t *vmm, size_t addr);
 
 void vmm_flush(VMM_t *vmm);
 
@@ -57,13 +57,13 @@ int compare_page_number(const void *e1, const void *e2)
     return (intptr_t)e1 - (intptr_t)e2;
 }
 
-static uint64_t get_page_number_by_address(VMM_t *vmm, uint64_t address)
+static inline size_t get_page_number_by_address(VMM_t *vmm, size_t address)
 {
-    uint64_t page_number = address / vmm->page_size;
+    const size_t page_number = address / vmm->page_size;
     return page_number;
 }
 
-static vmTable_t *get_TLB(VMM_t *vmm, uint64_t page_number)
+static vmTable_t *get_TLB(VMM_t *vmm, size_t page_number)
 {
     log_trace("getting TLB for page %d", page_number);
 
@@ -82,7 +82,7 @@ static vmTable_t *get_TLB(VMM_t *vmm, uint64_t page_number)
     return NULL;
 }
 
-static void on_page_cache_flush(uint64_t page_number, void * buf, void * flush_context){
+static void on_page_cache_flush(size_t page_number, void * buf, void * flush_context){
     VMM_t * vmm = flush_context;
     if (fseek(vmm->backing_store, page_number * vmm->page_size, SEEK_SET) != 0)
     {
@@ -95,7 +95,7 @@ static void on_page_cache_flush(uint64_t page_number, void * buf, void * flush_c
     }
 }
 
-static void backing_store_write(VMM_t *vmm, uint64_t page_number, const uint8_t *buf, const uint64_t buf_len)
+static void backing_store_write(VMM_t *vmm, size_t page_number, const uint8_t *buf, const size_t buf_len)
 {
 #ifdef VMM_DEBUG
     struct timeval tv_start;
@@ -125,7 +125,7 @@ static void backing_store_write(VMM_t *vmm, uint64_t page_number, const uint8_t 
 #endif
 }
 
-static void backing_store_read(VMM_t *vmm, uint64_t page_number, uint8_t *buf, const uint64_t buf_len)
+static void backing_store_read(VMM_t *vmm, size_t page_number, uint8_t *buf, const size_t buf_len)
 {
 #ifdef VMM_DEBUG
     struct timeval tv_start;
@@ -198,7 +198,7 @@ static vmTable_t *find_empty_TLB(VMM_t *vmm)
 #ifdef VMM_DEBUG
     if ((vmm->page_faults % 1000 == 0))
     {
-        printf("page fault %" PRIu64 ", read %" PRIu64 " (%" PRIu64 " bytes), write %" PRIu64 " (%" PRIu64 " bytes), store read %" PRIu64 " (%" PRIu64 " bytes %" PRIu64 " ms), store write %" PRIu64 " (%" PRIu64 " bytes %" PRIu64 " ms)\r\n",
+        printf("page fault %zu, read %zu (%zu bytes), write %zu (%zu bytes), store read %zu (%zu bytes %zu ms), store write %zu (%zu bytes %zu ms)\r\n",
                vmm->page_faults,
                vmm->reads, vmm->read_bytes,
                vmm->writes, vmm->write_bytes,
@@ -211,7 +211,7 @@ static vmTable_t *find_empty_TLB(VMM_t *vmm)
     return page;
 }
 
-static void load_page(VMM_t *vmm, uint64_t page_number, vmTable_t *page)
+static void load_page(VMM_t *vmm, size_t page_number, vmTable_t *page)
 {
     backing_store_read(vmm, page_number, page->page_cache, vmm->page_size);
 }
@@ -230,9 +230,9 @@ void on_page_flush(void *key, void *value, void *context)
 
 
 
-VMM_t *vmm_create(const char *pagefile, uint64_t maximum_size, uint64_t page_size, uint64_t number_of_pages, size_t maximum_himem_blocks)
+VMM_t *vmm_create(const char *pagefile, size_t maximum_size, size_t page_size, size_t number_of_pages, size_t maximum_himem_blocks)
 {
-    printf("creating vmm %s size: %" PRIu64 ", page: %" PRIu64 ", pages: %" PRIu64 ", total: %" PRIu64 "\r\n",
+    log_info("creating vmm %s size: %zu, page: %zu, pages: %zu, total: %zu\r\n",
            pagefile, maximum_size, page_size, number_of_pages, page_size * number_of_pages);
     VMM_t *vmm = (VMM_t *)malloc(sizeof(VMM_t));
     assert(vmm);
@@ -257,7 +257,7 @@ VMM_t *vmm_create(const char *pagefile, uint64_t maximum_size, uint64_t page_siz
 #endif
 
     vmm->lru_cache = lru_cache_init(compare_page_number, on_page_flush, vmm);
-    vmm->direct_cache = direct_cache_init(1024);
+    vmm->direct_cache = direct_cache_init(1024 * 8);
     vmm->page_cache = page_cache_init(page_size,maximum_himem_blocks, on_page_cache_flush, vmm);
 
     log_trace("creating page file %s of %d", pagefile, maximum_size);
@@ -327,26 +327,26 @@ void vmm_destroy(VMM_t *vmm)
     free(vmm);
 }
 
-static uint64_t vmm_read_internal(VMM_t *vmm, uint64_t addr, void *target, uint64_t len)
+static size_t vmm_read_internal(VMM_t *vmm, size_t addr, void *target, size_t len)
 {
     log_trace("reading from address 0x%" PRIx64 " %d bytes", addr, len);
     vmTable_t *page = get_page(vmm, addr);
-    uint64_t offset = addr - page->page_address;
-    uint64_t max_length = vmm->page_size - offset;
+    const size_t offset = addr - page->page_address;
+    const size_t max_length = vmm->page_size - offset;
     len = MIN(len, max_length);
     memcpy(target, page->page_cache + offset, len);
     return len;
 }
 
-void vmm_read(VMM_t *vmm, uint64_t addr, void *target, uint64_t len)
+void vmm_read(VMM_t *vmm, size_t addr, void *target, size_t len)
 {
-    log_debug("reading %s from address 0x%" PRIx64 " %" PRIu64 " bytes", vmm->filename, addr, len);
+    log_debug("reading %s from address 0x%" PRIx64 " %zu bytes", vmm->filename, addr, len);
 
-    uint64_t remain = len;
-    uint64_t offset = 0;
+    size_t remain = len;
+    size_t offset = 0;
     while (remain)
     {
-        uint64_t toCpy = vmm_read_internal(vmm, addr + offset, (uint8_t *)target + offset, remain);
+        size_t toCpy = vmm_read_internal(vmm, addr + offset, (uint8_t *)target + offset, remain);
         offset += toCpy;
         remain -= toCpy;
     }
@@ -357,18 +357,18 @@ void vmm_read(VMM_t *vmm, uint64_t addr, void *target, uint64_t len)
 
     if ((vmm->reads % 1000000 == 0) || (vmm->read_bytes % 1000000 == 0))
     {
-        // printf("reads %" PRIu64 " bytes %" PRIu64 "\r\n", vmm->reads, vmm->read_bytes);
+        // printf("reads %zu bytes %zu\r\n", vmm->reads, vmm->read_bytes);
     }
 #endif
 }
 
-static uint64_t vmm_write_internal(VMM_t *vmm, uint64_t addr, void *source, uint64_t len)
+static size_t vmm_write_internal(VMM_t *vmm, size_t addr, void *source, size_t len)
 {
     log_trace("internal writing to address 0x%" PRIx64 " %d bytes", addr, len);
     vmTable_t *page = get_page(vmm, addr);
     assert(page);
-    uint64_t offset = addr - page->page_address;
-    uint64_t max_length = vmm->page_size - offset;
+    const size_t offset = addr - page->page_address;
+    const size_t max_length = vmm->page_size - offset;
     log_trace("internal page offset 0x%" PRIx64 ", max length %d", offset, max_length);
     len = MIN(len, max_length);
     memcpy(page->page_cache + offset, source, len);
@@ -376,15 +376,15 @@ static uint64_t vmm_write_internal(VMM_t *vmm, uint64_t addr, void *source, uint
     return len;
 }
 
-void vmm_write(VMM_t *vmm, const uint64_t addr, const void *source, const uint64_t len)
+void vmm_write(VMM_t *vmm, const size_t addr, const void *source, const size_t len)
 {
-    log_debug("writing %s to address 0x%" PRIx64 " %" PRIu64 " bytes", vmm->filename, addr, len);
+    log_debug("writing %s to address 0x%" PRIx64 " %zu bytes", vmm->filename, addr, len);
 
-    uint64_t remain = len;
-    uint64_t offset = 0;
+    size_t remain = len;
+    size_t offset = 0;
     while (remain)
     {
-        uint64_t toCpy = vmm_write_internal(vmm, addr + offset, (uint8_t *)source + offset, remain);
+        size_t toCpy = vmm_write_internal(vmm, addr + offset, (uint8_t *)source + offset, remain);
         offset += toCpy;
         remain -= toCpy;
     }
@@ -395,18 +395,18 @@ void vmm_write(VMM_t *vmm, const uint64_t addr, const void *source, const uint64
 
     if ((vmm->writes % 1000000 == 0) || (vmm->write_bytes % 1000000 == 0))
     {
-        // printf("writes %" PRIu64 " bytes %" PRIu64 "\r\n", vmm->writes, vmm->write_bytes);
+        // printf("writes %zu bytes %zu\r\n", vmm->writes, vmm->write_bytes);
     }
 #endif
     // TODO(dror): don't flush!
     // vmm_flush(vmm);
 }
 
-static vmTable_t *get_page(VMM_t *vmm, uint64_t addr)
+static vmTable_t *get_page(VMM_t *vmm, size_t addr)
 {
     log_trace("getting page for 0x%" PRIx64 "", addr);
-    uint64_t page_number = get_page_number_by_address(vmm, addr);
-    uint64_t page_offset = page_number * vmm->page_size;
+    const size_t page_number = get_page_number_by_address(vmm, addr);
+    const size_t page_offset = page_number * vmm->page_size;
 
     log_trace("page number %d, offset 0x%" PRIx64 "", page_number, page_offset);
 

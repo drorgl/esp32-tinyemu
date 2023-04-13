@@ -9,6 +9,7 @@ typedef struct
     void *key;
     void *value;
     list_node_t *node;
+    size_t access;
 
 } cache_item_t;
 
@@ -46,7 +47,10 @@ void *lru_cache_get(cache_t *cache, void *key)
 
     if (cache_item != NULL)
     {
-        list_lpush(cache->cache_item_list, cache_item->node);
+        cache_item->access++;
+        if ((cache_item->access % LRU_MARKING) == 0){
+            list_lpush(cache->cache_item_list, cache_item->node);
+        }
         return cache_item->value;
     }
     return NULL;
@@ -123,6 +127,7 @@ void lru_cache_add(cache_t *cache, void *key, void *value)
     cache_item->key = key;
     cache_item->value = value;
     cache_item->node = list_node_new(cache_item);
+    cache_item->access = 0;
     memory_indexer_set(cache->memory_indexer, (intptr_t) key, cache_item);
     list_lpush(cache->cache_item_list, cache_item->node);
     cache->number_of_items++;

@@ -11,7 +11,7 @@ struct _memory_indexer_t
 struct memory_wrapper
 {
     struct avl_node avl;
-    uint64_t key;
+    size_t key;
     void *value;
 };
 
@@ -37,7 +37,7 @@ memory_indexer_t *memory_indexer_init()
 
     return indexer;
 }
-void memory_indexer_set(memory_indexer_t *indexer, uint64_t key, void *value)
+void memory_indexer_set(memory_indexer_t *indexer, size_t key, void *value)
 {
     memory_indexer_remove(indexer, key);
 
@@ -53,7 +53,7 @@ void memory_indexer_set(memory_indexer_t *indexer, uint64_t key, void *value)
     // printf("duplicate %d\n", key);
 
 }
-void *memory_indexer_search(memory_indexer_t *indexer, uint64_t key)
+void *memory_indexer_search(memory_indexer_t *indexer, size_t key)
 {
     struct memory_wrapper query = {};
     query.key = key;
@@ -65,7 +65,7 @@ void *memory_indexer_search(memory_indexer_t *indexer, uint64_t key)
     }
     return NULL;
 }
-void memory_indexer_remove(memory_indexer_t *indexer, uint64_t key)
+void memory_indexer_remove(memory_indexer_t *indexer, size_t key)
 {
     struct memory_wrapper query;
     query.key = key;

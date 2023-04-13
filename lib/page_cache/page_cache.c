@@ -16,21 +16,21 @@ struct _page_cache_t
 {
     cache_t *lru_cache;
     direct_cache_t * direct_cache;
-    uint64_t page_size;
+    size_t page_size;
 
-    uint16_t himem_maximum_blocks;
-    // uint16_t himem_available_blocks;
-    uint16_t himem_last_allocated_block;
+    size_t himem_maximum_blocks;
+    // size_t himem_available_blocks;
+    size_t himem_last_allocated_block;
     himem_t * himem;
     void * flush_buffer;
     void * flush_context;
-    void (*on_flush)(uint64_t page_number, void * buf, void* flush_context)
+    void (*on_flush)(size_t page_number, void * buf, void* flush_context)
 };
 
 struct page_cache_item_t
 {
-    uint64_t page_number;
-    uint16_t block_id;
+    size_t page_number;
+    size_t block_id;
 };
 
 static int compare_page_number(const void *e1, const void *e2)
@@ -46,7 +46,7 @@ static void on_page_flush(void *key, void *value, void *context)
     page_cache->on_flush(key,page_cache->flush_buffer, page_cache->flush_context);
 }
 
-page_cache_t *page_cache_init(size_t page_size, uint16_t maximum_himem_blocks, void (*on_flush)(uint64_t page_number, void * buf,void * flush_context), void* flush_context)
+page_cache_t *page_cache_init(size_t page_size, size_t maximum_himem_blocks, void (*on_flush)(size_t page_number, void * buf,void * flush_context), void* flush_context)
 {
     page_cache_t *page_cache = (page_cache_t *)malloc(sizeof(page_cache_t));
     page_cache->flush_context = flush_context;
@@ -62,12 +62,12 @@ page_cache_t *page_cache_init(size_t page_size, uint16_t maximum_himem_blocks, v
     page_cache->himem_last_allocated_block = 0;
 
     page_cache->lru_cache = lru_cache_init(compare_page_number, on_page_flush, page_cache);
-    page_cache->direct_cache = direct_cache_init(1024);
+    page_cache->direct_cache = direct_cache_init(2048);
 
     return page_cache;
 }
 
-bool page_cache_get(page_cache_t *page_cache, uint64_t page_number, void *buff)
+bool page_cache_get(page_cache_t *page_cache, size_t page_number, void *buff)
 {
     // printf("getting page %d\n", page_number);
     struct page_cache_item_t *page_item = direct_cache_get(page_cache->direct_cache, page_number);
@@ -76,7 +76,7 @@ bool page_cache_get(page_cache_t *page_cache, uint64_t page_number, void *buff)
     }
     if (page_item != NULL)
     {
-        uint16_t block_id = page_item->block_id;
+        size_t block_id = page_item->block_id;
         // printf("got block %d\n", block_id);
         himem_read(page_cache->himem,block_id, buff, page_cache->page_size);
         return true;
@@ -85,7 +85,7 @@ bool page_cache_get(page_cache_t *page_cache, uint64_t page_number, void *buff)
 }
 
 
-void page_cache_set(page_cache_t *page_cache, uint64_t page_number, void *buff)
+void page_cache_set(page_cache_t *page_cache, size_t page_number, void *buff)
 {
     // printf("setting page %d\n", page_number);
     struct page_cache_item_t *page_item = direct_cache_get(page_cache->direct_cache, page_number);
@@ -95,13 +95,13 @@ void page_cache_set(page_cache_t *page_cache, uint64_t page_number, void *buff)
 
     if (page_item != NULL)
     {
-        uint16_t block_id = page_item->block_id;
+        size_t block_id = page_item->block_id;
         // printf("on block %d \n", block_id);
         himem_write(page_cache->himem,block_id, buff, page_cache->page_size);
     }
     else
     {
-        uint16_t block_id;
+        size_t block_id;
         if (page_cache->himem_last_allocated_block < page_cache->himem_maximum_blocks)
         {
             page_item = (struct page_cache_item_t *)malloc(sizeof(struct page_cache_item_t));

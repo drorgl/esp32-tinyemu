@@ -5,8 +5,8 @@
 
 typedef struct vmTable_t
 {
-    uint64_t page_number;
-    uint64_t page_address;
+    size_t page_number;
+    size_t page_address;
     uint8_t *page_cache;
     bool dirty;
 } vmTable_t;

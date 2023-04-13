@@ -130,13 +130,13 @@ static PhysMemoryRange *default_register_ram(PhysMemoryMap *s, uint64_t addr,
     }
 
     //testing new indexer
-    vmm_pages = 380;
+    vmm_pages = 400;
     uint32_t vmm_page_size = 1024 * 8;
 
     size_t maxiumum_blocks = 500;
     if (addr == 0){
-        maxiumum_blocks = 15; //bios doesn't need more than 128k
-        vmm_pages = 200;
+        maxiumum_blocks = 12; //bios doesn't need more than 128k
+        vmm_pages = 10;
     }
 
     pr->vmm = vmm_create(fullpath, size, vmm_page_size, vmm_pages, maxiumum_blocks);

@@ -3,6 +3,10 @@
 #include <stdint.h>
 #include <malloc.h>
 
+#ifdef ESP32
+#include <esp_heap_caps.h>
+#endif
+
 struct cache_line
 {
     void *value;
@@ -19,7 +23,11 @@ direct_cache_t *direct_cache_init(size_t cache_size)
 {
     direct_cache_t *cache = (direct_cache_t *)malloc(sizeof(direct_cache_t));
     cache->cache_size = cache_size;
+#ifdef ESP32
+    cache->cache = (struct cache_line *)heap_caps_malloc(sizeof(struct cache_line) * cache_size,MALLOC_CAP_INTERNAL );
+#else
     cache->cache = (struct cache_line *)malloc(sizeof(struct cache_line) * cache_size);
+#endif
     for (size_t i = 0; i < cache_size;i++){
         cache->cache[i].key = i + 1;
     }
