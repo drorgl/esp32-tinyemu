@@ -471,7 +471,7 @@ static int load_file(uint8_t **pbuf, const char *filename)
         perror(fullpath);
         exit(1);
     }
-    if (setvbuf(f, NULL, _IOFBF, 1024 * 8) != 0)
+    if (setvbuf(f, NULL, _IOFBF, 1024 * 4) != 0)
     {
         perror ("setvbuf");
     }

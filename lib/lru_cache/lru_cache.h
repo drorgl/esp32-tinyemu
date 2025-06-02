@@ -2,7 +2,7 @@
 
 #include <stddef.h>
 
-#define LRU_MARKING 100
+#define LRU_MARKING 10
 
 struct _cache_t;
 typedef struct _cache_t cache_t;
@@ -13,7 +13,7 @@ size_t lru_cache_count(cache_t * cache);
 
 void *lru_cache_get(cache_t *cache, void *key);
 
-void *lru_cache_get_least_recently_used(cache_t * cache);
+void *lru_cache_get_least_recently_used(cache_t * cache, int index);
 
 void lru_cache_remove(cache_t * cache, void* key);
 

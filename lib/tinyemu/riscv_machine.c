@@ -838,7 +838,7 @@ static void load_file_to_vmm(VMM_t *vmm, const char * filename, uint32_t address
         perror(fullpath);
         exit(1);
     }
-    if (setvbuf(f, NULL, _IOFBF, 1024 * 8) != 0)
+    if (setvbuf(f, NULL, _IOFBF, 1024 * 4) != 0)
     {
         perror ("setvbuf");
     }
@@ -865,7 +865,7 @@ static void load_file_to_vmm(VMM_t *vmm, const char * filename, uint32_t address
 
     if (total_read != *read_size){
     // if (fread(buf, 1, read_size, f) != read_size) {
-        fprintf(stderr, "%s: read error, should have been %d bytes, but was %d bytes\n", fullpath, *read_size, total_read);
+        fprintf(stderr, "%s: read error, should have been %" PRIu32 " bytes, but was %" PRIu32 " bytes\n", fullpath, *read_size, total_read);
         exit(1);
     }
     fclose(f);
@@ -897,7 +897,7 @@ static void copy_bios(RISCVMachine *s, const char * bios_filename,
     uint32_t bios_size = 0;
     // vmm_write(pr->vmm, ram_ptr - pr->phys_mem, buf, buf_len);
     load_file_to_vmm(pr->vmm,bios_filename, ram_ptr - pr->phys_mem, &bios_size);
-    printf("copied bios from %s to 0x%" PRIx64 " %d bytes\r\n", bios_filename, (uint64_t)(ram_ptr - pr->phys_mem), bios_size);
+    printf("copied bios from %s to 0x%" PRIx64 " %" PRIu32 " bytes\r\n", bios_filename, (uint64_t)(ram_ptr - pr->phys_mem), bios_size);
 
     // printf("copying bios from 0x%" PRIx64 " to ptr 0x%" PRIx64 " %d bytes\r\n",(uint64_t)buf,(uint64_t) (ram_ptr), buf_len);
     // memcpy(ram_ptr, buf, buf_len);
@@ -914,7 +914,7 @@ static void copy_bios(RISCVMachine *s, const char * bios_filename,
 
         //vmm_write(pr->vmm, ram_ptr - pr->phys_mem + kernel_base, kernel_buf, kernel_buf_len);
         load_file_to_vmm(pr->vmm,kernel_filename,  ram_ptr - pr->phys_mem + kernel_base,&kernel_size );
-        printf("copied kernel from %s to 0x%" PRIx64 " %d bytes\r\n",kernel_filename,(uint64_t) (ram_ptr - pr->phys_mem)+ kernel_base, kernel_size);
+        printf("copied kernel from %s to 0x%" PRIx64 " %" PRIu32 " bytes\r\n",kernel_filename,(uint64_t) (ram_ptr - pr->phys_mem)+ kernel_base, kernel_size);
         // = filesize
     } else {
         kernel_base = 0;
@@ -928,7 +928,7 @@ static void copy_bios(RISCVMachine *s, const char * bios_filename,
         // memcpy(ram_ptr + initrd_base, initrd_buf, initrd_buf_len);
         // printf("copying initrd from %s to 0x%" PRIx64 " %d bytes\r\n",initrd_filename,(uint64_t) (ram_ptr - pr->phys_mem)+ initrd_base, initrd_size);
         load_file_to_vmm(pr->vmm,initrd_filename,  ram_ptr - pr->phys_mem + initrd_base,&initrd_size );
-        printf("copied initrd from %s to 0x%" PRIx64 " %d bytes\r\n",initrd_filename,(uint64_t) (ram_ptr - pr->phys_mem)+ initrd_base, initrd_size);
+        printf("copied initrd from %s to 0x%" PRIx64 " %" PRIu32 " bytes\r\n",initrd_filename,(uint64_t) (ram_ptr - pr->phys_mem)+ initrd_base, initrd_size);
         // if (initrd_buf_len + initrd_base > s->ram_size) {
         //     vm_error("initrd too big");
         //     exit(1);
@@ -936,6 +936,7 @@ static void copy_bios(RISCVMachine *s, const char * bios_filename,
     }else{
         initrd_base = 0;
     }
+    vmm_flush(pr->vmm);
 
     ram_ptr = get_ram_ptr(s, 0, TRUE);
     pr = get_phys_mem_range(s->mem_map, 0);
@@ -960,6 +961,8 @@ static void copy_bios(RISCVMachine *s, const char * bios_filename,
     qbuf[4] = 0x00028067; /* jalr zero, t0, jump_addr */
     vmm_write(pr->vmm, ram_ptr  - pr->phys_mem+  0x1000, &qbuf, sizeof(qbuf));
 
+    vmm_flush(pr->vmm);
+    // exit(1);
 
     // printf("writing jump address ram ptr: 0x%" PRIx64 " phy: 0x%p\r\n", ram_ptr + 0x1000, pr->phys_mem);
     // q = (uint32_t *)(ram_ptr + 0x1000);

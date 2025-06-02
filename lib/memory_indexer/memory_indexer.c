@@ -57,7 +57,7 @@ void *memory_indexer_search(memory_indexer_t *indexer, size_t key)
 {
     struct memory_wrapper query = {};
     query.key = key;
-    struct avl_node_t *avl_node = avl_search(&indexer->avl_tree, &query.avl, cmp_func);
+    struct avl_node *avl_node = avl_search(&indexer->avl_tree, &query.avl, cmp_func);
     if (avl_node)
     {
         struct memory_wrapper *wrapper = _get_entry(avl_node, struct memory_wrapper, avl);
@@ -69,20 +69,19 @@ void memory_indexer_remove(memory_indexer_t *indexer, size_t key)
 {
     struct memory_wrapper query;
     query.key = key;
-    struct avl_node_t *avl_node = avl_search(&indexer->avl_tree, &query.avl, cmp_func);
+    struct avl_node *avl_node = avl_search(&indexer->avl_tree, &query.avl, cmp_func);
     if (avl_node)
     {
         struct memory_wrapper *wrapper = _get_entry(avl_node, struct memory_wrapper, avl);
         avl_remove(&indexer->avl_tree, avl_node);
         free(wrapper);
     }
-    return NULL;
 }
 
 size_t memory_indexer_free(memory_indexer_t *indexer)
 {
     size_t x = 0;
-    struct avl_node_t *avl_node = avl_first(&indexer->avl_tree);
+    struct avl_node *avl_node = avl_first(&indexer->avl_tree);
     while (avl_node)
     {
         struct memory_wrapper *node = _get_entry(avl_node, struct memory_wrapper, avl);

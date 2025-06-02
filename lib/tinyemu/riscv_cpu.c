@@ -95,7 +95,7 @@ static void fprint_target_ulong(FILE *f, target_ulong a)
 #else
 static void fprint_target_ulong(FILE *f, target_ulong a)
 {
-    fprintf(f, "%" PR_target_ulong, a);
+    // fprintf(f, "%" PR_target_ulong, a);
 }
 #endif
 
@@ -184,7 +184,13 @@ static __maybe_unused inline void phys_write_u ## size(RISCVCPUState *s, target_
     PhysMemoryRange *pr = get_phys_mem_range(s->mem_map, addr);\
     if (!pr || !pr->is_ram)\
         return;\
-    vmm_write(pr->vmm,addr - (target_ulong)pr->addr, &val, sizeof(uint_type));\
+    VMM_fastpage_t *fastpage = vmm_write_preload_fastpage(pr->vmm, addr - (target_ulong)pr->addr); \
+    if (fastpage->page_end > (addr - (target_ulong)pr->addr + sizeof(uint16_t))) { \
+        *(target_ulong *)(fastpage->buffer  + ((addr - (target_ulong)pr->addr)- fastpage->page_start)) = val;  \
+    } \
+    else{ \
+        vmm_write(pr->vmm, addr - (target_ulong)pr->addr, &val, sizeof(uint16_t)); \
+    } \
 }\
 \
 static __maybe_unused inline uint_type phys_read_u ## size(RISCVCPUState *s, target_ulong addr) \
@@ -192,9 +198,16 @@ static __maybe_unused inline uint_type phys_read_u ## size(RISCVCPUState *s, tar
     PhysMemoryRange *pr = get_phys_mem_range(s->mem_map, addr);\
     if (!pr || !pr->is_ram)\
         return 0;\
-    uint_type tmp; \
-    vmm_read(pr->vmm,addr - (target_ulong)pr->addr, &tmp, sizeof(uint_type) );\
-    return tmp;\
+    \
+    VMM_fastpage_t *fastpage = vmm_read_preload_fastpage(pr->vmm, addr - (target_ulong)pr->addr); \
+    if (fastpage->page_end > (addr - (target_ulong)pr->addr + sizeof(uint_type))) { \
+        return *(uint_type *)(fastpage->buffer  + ((addr - (target_ulong)pr->addr)- fastpage->page_start));  \
+    } \
+    else{ \
+        uint_type tmp; \
+        vmm_read(pr->vmm, addr - (target_ulong)pr->addr, &tmp, sizeof(uint_type)); \
+        return tmp; \
+    } \
 }
 #endif
 
@@ -413,44 +426,86 @@ int target_read_slow(RISCVCPUState *s, mem_uint_t *pval,
             ptr = pr->phys_mem + /*(uintptr_t)*/(paddr - pr->addr);
             // s->tlb_read[tlb_idx].vaddr = addr & ~PG_MASK;
             // s->tlb_read[tlb_idx].mem_addend = (uintptr_t)ptr - addr;
+            VMM_fastpage_t *fastpage = vmm_read_preload_fastpage(pr->vmm, ptr - pr->phys_mem);
+            // printf("reading from fastpage %d, addr %zu-%zu, %zu\r\n", fastpage->page_number, fastpage->page_start,fastpage->page_end,  ((ptr - pr->phys_mem)- fastpage->page_start));
             switch(size_log2) {
             case 0:
                 {
+                    if (fastpage->page_end > (ptr - pr->phys_mem + sizeof(uint8_t))) {
+                        
+                        ret = *(uint8_t *)(fastpage->buffer  + ((ptr - pr->phys_mem)- fastpage->page_start)); 
+                    }
+                    else{
+                        uint8_t tret1;
+                        vmm_read(pr->vmm, ptr - pr->phys_mem, &tret1, sizeof(uint8_t));
+                        ret = tret1;
+                    }
                 // ret = *(uint8_t *)ptr;
-                uint8_t tret1;
-                vmm_read(pr->vmm, ptr - pr->phys_mem, &tret1, sizeof(uint8_t));
-                ret = tret1;
                 }
                 break;
             case 1:
                 {
+                    if (fastpage->page_end > (ptr - pr->phys_mem + sizeof(uint16_t))) {
+                        ret = *(uint16_t *)(fastpage->buffer  + ((ptr - pr->phys_mem)- fastpage->page_start)); 
+                    }
+                    else{
+                        uint16_t tret1;
+                        vmm_read(pr->vmm, ptr - pr->phys_mem, &tret1, sizeof(uint16_t));
+                        ret = tret1;
+                    }
                 // ret = *(uint16_t *)ptr;
-                uint16_t tret2;
-                vmm_read(pr->vmm, ptr - pr->phys_mem, &tret2, sizeof(uint16_t));
-                ret = tret2;
+                // uint16_t tret2;
+                // vmm_read(pr->vmm, ptr - pr->phys_mem, &tret2, sizeof(uint16_t));
+                // ret = tret2;
                 }
                 break;
             case 2:
             {
+                if (fastpage->page_end > (ptr - pr->phys_mem + sizeof(uint32_t))) {
+                    ret = *(uint32_t *)(fastpage->buffer  + ((ptr - pr->phys_mem)- fastpage->page_start)); 
+                }
+                else{
+                    uint32_t tret1;
+                    vmm_read(pr->vmm, ptr - pr->phys_mem, &tret1, sizeof(uint32_t));
+                    ret = tret1;
+                }
+
                 // ret = *(uint32_t *)ptr;
-                uint32_t tret3;
-                vmm_read(pr->vmm, ptr - pr->phys_mem, &tret3, sizeof(uint32_t));
-                ret = tret3;
+                // uint32_t tret3;
+                // vmm_read(pr->vmm, ptr - pr->phys_mem, &tret3, sizeof(uint32_t));
+                // ret = tret3;
             }
                 break;
 #if MLEN >= 64
             case 3:
             {
+                if (fastpage->page_end > (ptr - pr->phys_mem + sizeof(uint64_t))) {
+                    ret = *(uint64_t *)(fastpage->buffer  + ((ptr - pr->phys_mem)- fastpage->page_start)); 
+                }
+                else{
+                    uint64_t tret1;
+                    vmm_read(pr->vmm, ptr - pr->phys_mem, &tret1, sizeof(uint64_t));
+                    ret = tret1;
+                }
+
                 // ret = *(uint64_t *)ptr;
-                uint64_t tret4;
-                vmm_read(pr->vmm, ptr - pr->phys_mem, &tret4, sizeof(uint64_t));
-                ret = tret4;
+                // uint64_t tret4;
+                // vmm_read(pr->vmm, ptr - pr->phys_mem, &tret4, sizeof(uint64_t));
+                // ret = tret4;
             }
                 break;
 #endif
 #if MLEN >= 128
             case 4:
-                ret = *(uint128_t *)ptr;
+                if (fastpage->page_end > (ptr - pr->phys_mem + sizeof(uint128_t))) {
+                    ret = *(uint128_t *)(fastpage->buffer  + ((ptr - pr->phys_mem)- fastpage->page_start)); 
+                }
+                else{
+                    uint128_t tret1;
+                    vmm_read(pr->vmm, ptr - pr->phys_mem, &tret1, sizeof(uint128_t));
+                    ret = tret1;
+                }
+                // ret = *(uint128_t *)ptr;
                 break;
 #endif
             default:
@@ -520,40 +575,72 @@ int target_write_slow(RISCVCPUState *s, target_ulong addr,
             ptr = pr->phys_mem + /*(uintptr_t)*/(paddr - pr->addr);
             // s->tlb_write[tlb_idx].vaddr = addr & ~PG_MASK;
             // s->tlb_write[tlb_idx].mem_addend = (uintptr_t)ptr - addr;
+            VMM_fastpage_t *fastpage = vmm_write_preload_fastpage(pr->vmm,  ptr - pr->phys_mem); \
+   
             switch(size_log2) {
             case 0:
             {
+                if (fastpage->page_end > (ptr - pr->phys_mem + sizeof(uint8_t))) { 
+                    *(uint8_t *)(fastpage->buffer  + ((ptr - pr->phys_mem)- fastpage->page_start)) = val;  
+                } 
+                else{ 
+                    vmm_write(pr->vmm, ptr - pr->phys_mem, &val, sizeof(uint8_t)); 
+                } 
                 // *(uint8_t *)ptr = val;
-                uint8_t tval1 = val;
-                vmm_write(pr->vmm, ptr - pr->phys_mem, &tval1, sizeof(uint8_t));
+                // uint8_t tval1 = val;
+                // vmm_write(pr->vmm, ptr - pr->phys_mem, &tval1, sizeof(uint8_t));
             }
                 break;
             case 1:
             {
+                if (fastpage->page_end > (ptr - pr->phys_mem + sizeof(uint16_t))) { 
+                    *(uint16_t *)(fastpage->buffer  + ((ptr - pr->phys_mem)- fastpage->page_start)) = val;  
+                } 
+                else{ 
+                    vmm_write(pr->vmm, ptr - pr->phys_mem, &val, sizeof(uint16_t)); 
+                } 
                 // *(uint16_t *)ptr = val;
-                uint16_t tval2 = val;
-                vmm_write(pr->vmm, ptr - pr->phys_mem, &tval2, sizeof(uint16_t));
+                // uint16_t tval2 = val;
+                // vmm_write(pr->vmm, ptr - pr->phys_mem, &tval2, sizeof(uint16_t));
             }
                 break;
             case 2:
             {
+                if (fastpage->page_end > (ptr - pr->phys_mem + sizeof(uint32_t))) { 
+                    *(uint32_t *)(fastpage->buffer  + ((ptr - pr->phys_mem)- fastpage->page_start)) = val;  
+                } 
+                else{ 
+                    vmm_write(pr->vmm, ptr - pr->phys_mem, &val, sizeof(uint32_t)); 
+                } 
                 // *(uint32_t *)ptr = val;
-                uint32_t tval3 = val;
-                vmm_write(pr->vmm, ptr - pr->phys_mem, &tval3, sizeof(uint32_t));
+                // uint32_t tval3 = val;
+                // vmm_write(pr->vmm, ptr - pr->phys_mem, &tval3, sizeof(uint32_t));
             }
                 break;
 #if MLEN >= 64
             case 3:
             {
+                 if (fastpage->page_end > (ptr - pr->phys_mem + sizeof(uint64_t))) { 
+                    *(uint64_t *)(fastpage->buffer  + ((ptr - pr->phys_mem)- fastpage->page_start)) = val;  
+                } 
+                else{ 
+                    vmm_write(pr->vmm, ptr - pr->phys_mem, &val, sizeof(uint64_t)); 
+                } 
                 // *(uint64_t *)ptr = val;
-                uint64_t tval4 = val;
-                vmm_write(pr->vmm, ptr - pr->phys_mem, &tval4, sizeof(uint64_t));
+                // uint64_t tval4 = val;
+                // vmm_write(pr->vmm, ptr - pr->phys_mem, &tval4, sizeof(uint64_t));
             }
                 break;
 #endif
 #if MLEN >= 128
             case 4:
-                *(uint128_t *)ptr = val;
+                if (fastpage->page_end > (ptr - pr->phys_mem + sizeof(uint128_t))) { 
+                    *(uint128_t *)(fastpage->buffer  + ((ptr - pr->phys_mem)- fastpage->page_start)) = val;  
+                } 
+                else{ 
+                    vmm_write(pr->vmm, ptr - pr->phys_mem, &val, sizeof(uint128_t)); 
+                } 
+                // *(uint128_t *)ptr = val;
                 break;
 #endif
             default:
@@ -637,11 +724,21 @@ static uint32_t get_vmm_insn32(RISCVCPUState *s, uint32_t ptr)
     //     return -1;
     // }   
 
-    struct unaligned_u32 pinsptr;
-    // vmm_read(pr->vmm, paddr - pr->addr, &pinsptr, sizeof(struct unaligned_u32));
-    // printf("reading inst32 from  0x%" PRIX64 " 0x%" PRIX64 "  0x%" PRIX64 " \r\n",ptr, ptr - pr->addr, pr->addr);
-    vmm_read(pr->vmm, ptr -  pr->addr, &pinsptr, sizeof(struct unaligned_u32));
-    return pinsptr.u32;
+    VMM_fastpage_t *fastpage = vmm_read_preload_fastpage(pr->vmm, ptr -  pr->addr); \
+    if (fastpage->page_end > (ptr -  pr->addr + sizeof(struct unaligned_u32))) { \
+        return (*(struct unaligned_u32 *)(fastpage->buffer  + ((ptr -  pr->addr)- fastpage->page_start))).u32;  \
+    } \
+    else{ \
+        struct unaligned_u32 pinsptr; \
+        vmm_read(pr->vmm, ptr -  pr->addr, &pinsptr, sizeof(struct unaligned_u32)); \
+        return pinsptr.u32; \
+    } \
+
+    // struct unaligned_u32 pinsptr;
+    // // vmm_read(pr->vmm, paddr - pr->addr, &pinsptr, sizeof(struct unaligned_u32));
+    // // printf("reading inst32 from  0x%" PRIX64 " 0x%" PRIX64 "  0x%" PRIX64 " \r\n",ptr, ptr - pr->addr, pr->addr);
+    // vmm_read(pr->vmm, ptr -  pr->addr, &pinsptr, sizeof(struct unaligned_u32));
+    // return pinsptr.u32;
     // return ((struct unaligned_u32 *)ptr)->u32;
 #endif
 }

@@ -2436,7 +2436,7 @@ static void copy_kernel(PCMachine *s, const uint8_t *buf, int buf_len,
     memcpy((uint8_t *)params + setup_hdr_start, buf + setup_hdr_start,
            setup_hdr_end - setup_hdr_start);
 
-    strcpy((char *)params->commandline, cmd_line);
+    strncpy((char *)params->commandline, cmd_line, sizeof(params->commandline));
 
     params->mount_root_rdonly = 0;
     params->cmd_line_ptr = KERNEL_PARAMS_ADDR +

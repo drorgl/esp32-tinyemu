@@ -399,7 +399,7 @@ static BlockDevice *block_device_init(const char *filename,
         perror(fullpath);
         exit(1);
     }
-    if (setvbuf(f, NULL, _IOFBF, 1024 * 8) != 0)
+    if (setvbuf(f, NULL, _IOFBF, 1024 * 4) != 0)
     {
         perror ("setvbuf");
     }
@@ -981,7 +981,7 @@ int main(int argc, char **argv)
 void app_main()
 {
     mount_sd_sdmmc();
-    const char *args[] = {
+    char *args[] = {
         "",
         "root-riscv32.cfg"};
     main(2, args);

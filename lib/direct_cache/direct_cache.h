@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stddef.h>
+#include <stdbool.h>
 
 struct _direct_cache_t;
 typedef struct _direct_cache_t direct_cache_t;

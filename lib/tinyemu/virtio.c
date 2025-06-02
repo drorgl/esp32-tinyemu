@@ -307,16 +307,28 @@ static uint16_t virtio_read16(VIRTIODevice *s, virtio_phys_addr_t addr)
 
     PhysMemoryRange *pr = get_phys_mem_range(s->mem_map, addr);
     assert(pr);
-    uint16_t vbuf;
-    vmm_read(pr->vmm, addr - pr->addr,&vbuf, sizeof(uint16_t) );
-    // ptr = s->get_ram_ptr(s, addr, FALSE);
-    // if (*(uint16_t *)ptr != vbuf){
-    //     printf("virtio_read16 0x%" PRIX16 " !=  0x%" PRIX16 " at 0x%" PRIX64 " \r\n", *(uint16_t *)ptr, vbuf, addr);
-    // }
-    // if (!ptr)
-    //     return 0;
-    // return *(uint16_t *)ptr;
-    return vbuf;
+
+    VMM_fastpage_t *fastpage = vmm_read_preload_fastpage(pr->vmm, addr - pr->addr);
+    if (fastpage->page_end > (addr - pr->addr + sizeof(uint16_t))) {
+        return *(uint16_t *)(fastpage->buffer  + ((addr - pr->addr)- fastpage->page_start)); 
+    }
+    else{
+        uint16_t vbuf;
+        vmm_read(pr->vmm, addr - pr->addr, &vbuf, sizeof(uint16_t));
+        return vbuf;
+    }
+    
+
+    // uint16_t vbuf;
+    // vmm_read(pr->vmm, addr - pr->addr,&vbuf, sizeof(uint16_t) );
+    // // ptr = s->get_ram_ptr(s, addr, FALSE);
+    // // if (*(uint16_t *)ptr != vbuf){
+    // //     printf("virtio_read16 0x%" PRIX16 " !=  0x%" PRIX16 " at 0x%" PRIX64 " \r\n", *(uint16_t *)ptr, vbuf, addr);
+    // // }
+    // // if (!ptr)
+    // //     return 0;
+    // // return *(uint16_t *)ptr;
+    // return vbuf;
 }
 
 static void virtio_write16(VIRTIODevice *s, virtio_phys_addr_t addr,
@@ -329,7 +341,18 @@ static void virtio_write16(VIRTIODevice *s, virtio_phys_addr_t addr,
 
     PhysMemoryRange *pr = get_phys_mem_range(s->mem_map, addr);
     assert(pr);
-    vmm_write(pr->vmm, addr- pr->addr, &val, sizeof(uint16_t));
+
+    VMM_fastpage_t *fastpage = vmm_write_preload_fastpage(pr->vmm, addr - pr->addr);
+    if (fastpage->page_end > (addr - pr->addr + sizeof(uint16_t))) {
+        *(uint16_t *)(fastpage->buffer  + ((addr - pr->addr)- fastpage->page_start)) = val; 
+    }
+    else{
+        vmm_write(pr->vmm, addr - pr->addr, &val, sizeof(uint16_t));
+    }
+
+
+
+    // vmm_write(pr->vmm, addr- pr->addr, &val, sizeof(uint16_t));
     // ptr = s->get_ram_ptr(s, addr, TRUE);
     // if (!ptr)
     //     return;
@@ -345,7 +368,15 @@ static void virtio_write32(VIRTIODevice *s, virtio_phys_addr_t addr,
         return; /* unaligned access are not supported */
     PhysMemoryRange *pr = get_phys_mem_range(s->mem_map, addr);
     assert(pr);
-    vmm_write(pr->vmm, addr- pr->addr, &val, sizeof(uint32_t));
+
+    VMM_fastpage_t *fastpage = vmm_write_preload_fastpage(pr->vmm, addr - pr->addr);
+    if (fastpage->page_end > (addr - pr->addr + sizeof(uint32_t))) {
+        *(uint32_t *)(fastpage->buffer  + ((addr - pr->addr)- fastpage->page_start)) = val; 
+    }
+    else{
+        vmm_write(pr->vmm, addr - pr->addr, &val, sizeof(uint32_t));
+    }
+    // vmm_write(pr->vmm, addr- pr->addr, &val, sizeof(uint32_t));
     // ptr = s->get_ram_ptr(s, addr, TRUE);
     // if (!ptr)
     //     return;
@@ -380,7 +411,7 @@ static int virtio_memcpy_from_ram(VIRTIODevice *s, uint8_t *buf,
 static int virtio_memcpy_to_ram(VIRTIODevice *s, virtio_phys_addr_t addr, 
                                 const uint8_t *buf, int count)
 {
-    // printf("memcpy to %" PRIX64 " %d bytes\r\n", addr, count);
+    // printf("memcpy to 0x%" PRIX64 " %d bytes\r\n", addr, count);
     // uint8_t *ptr;
     // int l;
 

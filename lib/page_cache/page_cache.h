@@ -10,8 +10,12 @@ struct _page_cache_t;
 typedef struct _page_cache_t page_cache_t;
 
 
-page_cache_t *page_cache_init(size_t page_size, size_t maximum_himem_blocks, void (*on_flush)(size_t page_number, void * buf,void * flush_context), void* flush_context);
+page_cache_t *page_cache_init(size_t page_size, size_t maximum_himem_blocks, void (*on_pre_flush)(size_t page_number, void * buf,void * flush_context), void (*on_flush)(size_t page_number, void * buf,void * flush_context), void* flush_context);
 
 bool page_cache_get(page_cache_t *page_cache, size_t page_number, void *buff);
 
-void page_cache_set(page_cache_t *page_cache, size_t page_number, void *buff);
+void page_cache_set(page_cache_t *page_cache, size_t page_number, const void *buff);
+
+void page_cache_deactivate(page_cache_t *page_cache, size_t page_number);
+
+void page_cache_flush(page_cache_t *page_cache);

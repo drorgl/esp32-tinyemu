@@ -1,5 +1,9 @@
 #pragma once
 
+#include "vmm_config.h"
+#include "vmm_statistics.h"
+#include "vmm_storage.h"
+
 #include <stdio.h>
 // #include <llist.h>
 // #include <splaytree.h>
@@ -18,38 +22,47 @@
 extern "C" {
 #endif
 
-// #define VMM_DEBUG
+
+
+typedef struct VMM_fastpage_t
+{
+    int32_t page_number;
+    size_t page_start;
+    size_t page_end;
+    uint8_t *buffer;
+    bool write_enabled;
+} VMM_fastpage_t;
+
 
 typedef struct VMM_t
 {
+    size_t maximum_size;
     size_t page_size;
     size_t number_of_pages;
+    size_t page_shift;
 
-    // list_t *pagetable;  // vmTable_t
     size_t pagetable_size;
-    FILE *backing_store;
+    // FILE *backing_store;
 
-    char filename[255];
+    // char filename[255];
 
-    // splaytree_t * search_tree;
     cache_t * lru_cache;
     direct_cache_t * direct_cache;
     page_cache_t * page_cache;
-#ifdef VMM_DEBUG
-    size_t reads;
-    size_t read_bytes;
-    size_t writes;
-    size_t write_bytes;
 
-    size_t store_writes;
-    size_t store_write_bytes;
-    size_t store_write_time;
-    size_t store_reads;
-    size_t store_read_bytes;
-    size_t store_read_time;
+    size_t last_page_number;
+    vmTable_t * last_page;
 
-    size_t page_faults;
-#endif
+    // uint8_t section_shift;
+    // uint8_t * page_dirty;
+    // uint8_t * dirty_write_sections;
+
+    struct VMM_storage_t *vmm_storage;
+
+    struct VMM_statistics_t statistics;
+
+    uint8_t * empty_page;
+    VMM_fastpage_t last_fastpage;
 } VMM_t;
 
 VMM_t *vmm_create(const char *pagefile, size_t maximum_size, size_t page_size, size_t number_of_pages, size_t maximum_himem_blocks);
@@ -57,6 +70,9 @@ VMM_t *vmm_create(const char *pagefile, size_t maximum_size, size_t page_size, s
 void vmm_destroy(VMM_t *vmm);
 
 void vmm_read(VMM_t *vmm, size_t addr, void *target, size_t len);
+
+VMM_fastpage_t * vmm_read_preload_fastpage(VMM_t *vmm, size_t addr);
+VMM_fastpage_t * vmm_write_preload_fastpage(VMM_t *vmm, size_t addr);
 
 void vmm_write(VMM_t *vmm, const size_t addr, const void *source, const size_t len);
 

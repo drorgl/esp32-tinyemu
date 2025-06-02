@@ -9,7 +9,7 @@ typedef struct
     void *key;
     void *value;
     list_node_t *node;
-    size_t access;
+    uint8_t access;
 
 } cache_item_t;
 
@@ -105,15 +105,15 @@ void lru_cache_flush_items(cache_t *cache, size_t number_of_items_to_flush)
         cache->on_flush(cache_item->key, cache_item->value, cache->context);
         free(cache_item->node);
         cache_item->node = NULL;
-        memory_indexer_remove(cache->memory_indexer, cache_item->key);
+        memory_indexer_remove(cache->memory_indexer, (size_t)cache_item->key);
         free(cache_item);
         cache->number_of_items--;
     }
 }
 
-void *lru_cache_get_least_recently_used(cache_t *cache)
+void *lru_cache_get_least_recently_used(cache_t *cache,int index )
 {
-    list_node_t *last = list_at(cache->cache_item_list, -1);
+    list_node_t *last = list_at(cache->cache_item_list, index);
     if (last != NULL)
     {
         return ((cache_item_t*)last->val)->value;

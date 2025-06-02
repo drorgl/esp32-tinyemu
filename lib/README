@@ -1,46 +1,57 @@
+# Virtual Memory
 
-This directory is intended for project specific (private) libraries.
-PlatformIO will compile them to static libraries and link into executable file.
 
-The source code of each library should be placed in a an own separate directory
-("lib/your_library_name/[here are source files]").
+```mermaid
+graph TD
+    A[First Level Cache L1] -->|Read| B[Second Level Cache L2]
+    A -->|Write| C[Disk]
+    B -->|Flush| C
 
-For example, see a structure of the following two libraries `Foo` and `Bar`:
+    A -->|Check Empty| D[Is Page Empty?]
+    D -->|Yes| E[Mark as Not Dirty]
+    D -->|No| F[Mark as Dirty]
 
-|--lib
-|  |
-|  |--Bar
-|  |  |--docs
-|  |  |--examples
-|  |  |--src
-|  |     |- Bar.c
-|  |     |- Bar.h
-|  |  |- library.json (optional, custom build options, etc) https://docs.platformio.org/page/librarymanager/config.html
-|  |
-|  |--Foo
-|  |  |- Foo.c
-|  |  |- Foo.h
-|  |
-|  |- README --> THIS FILE
-|
-|- platformio.ini
-|--src
-   |- main.c
+    E -->|Return Empty Value| G[Read Return]
+    F -->|Return Page| G
+    F -->|Flush to L2| B
 
-and a contents of `src/main.c`:
-```
-#include <Foo.h>
-#include <Bar.h>
-
-int main (void)
-{
-  ...
-}
-
+    B -->|Flush Dirty| C
+    C -->|Update Flags| A
 ```
 
-PlatformIO Library Dependency Finder will find automatically dependent
-libraries scanning project source files.
+# VMM
+- vmm_write and vmm_read
+- uses pages to store and load (1st level cache)
 
-More information about PlatformIO Library Dependency Finder
-- https://docs.platformio.org/page/librarymanager/ldf.html
+
+# 1st level cache
+- page dirty - used to mark which page is active and which page is not
+- page write dirty - used to mark which page needs flushing to storage
+- when page is flushed, it should be checked for zeros
+    - if zeros then the page dirty should be reset
+    - [ ] add a check for the page, build an 8 bit map of zeros, so instead of resetting the whole page, it should reset just part of it.
+    - only sections that were modified should be flushed to disk
+- when loading the page, only load from disk the page sections that were modified
+- when a page dirty section is not set, all reads from this section should return empty value
+- when reading from a not dirty page - just set value/buffer to 0x00
+
+# 2nd level cache
+- primitive page caching
+- can be set or get
+- when pages are removed it executes a function
+
+# logic
+- when loading a page
+    - check if the page is in the 2nd level cache
+        - if it is, return it from there
+        - if not, load it from disk by page dirty
+- when flushing 1st level
+    - it should check for zeros
+        - if it is
+            - the page dirty should be set to 0
+            - 2nd level cache should be flushed - page is no longer valid
+            - file section should be filled with zeros
+        - if not
+            - 
+        
+            

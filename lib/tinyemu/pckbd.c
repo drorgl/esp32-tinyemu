@@ -254,7 +254,7 @@ static void kbd_write_command(void *opaque, uint32_t addr, uint32_t val,
         /* ignore that - I don't know what is its use */
         break;
     default:
-        fprintf(stderr, "qemu: unsupported keyboard cmd=0x%02x\n", val);
+        fprintf(stderr, "qemu: unsupported keyboard cmd=0x%02" PRIx32 "\n", val);
         break;
     }
 }

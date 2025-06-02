@@ -505,7 +505,7 @@ static uint32_t ccc = 0;
 #elif FLEN >= 64
             case 1: /* c.fld */
                 {
-                    uint64_t rval;
+                    uint64_t rval = 0;
                     if (s->fs == 0)
                         goto illegal_insn;
                     imm = get_field1(insn, 10, 3, 5) |
@@ -521,7 +521,7 @@ static uint32_t ccc = 0;
 #endif
             case 2: /* c.lw */
                 {
-                    uint32_t rval;
+                    uint32_t rval = 0;
                     imm = get_field1(insn, 10, 3, 5) |
                         get_field1(insn, 6, 2, 2) |
                         get_field1(insn, 5, 6, 6);
@@ -537,7 +537,7 @@ static uint32_t ccc = 0;
 #if XLEN >= 64
             case 3: /* c.ld */
                 {
-                    uint64_t rval;
+                    uint64_t rval = 0;
                     imm = get_field1(insn, 10, 3, 5) |
                         get_field1(insn, 5, 6, 7);
                     rs1 = ((insn >> 7) & 7) | 8;
@@ -550,7 +550,7 @@ static uint32_t ccc = 0;
 #elif FLEN >= 32
             case 3: /* c.flw */
                 {
-                    uint32_t rval;
+                    uint32_t rval = 0;
                     if (s->fs == 0)
                         goto illegal_insn;
                     imm = get_field1(insn, 10, 3, 5) |
@@ -809,7 +809,7 @@ static uint32_t ccc = 0;
 #elif FLEN >= 64
             case 1: /* c.fldsp */
                 {
-                    uint64_t rval;
+                    uint64_t rval = 0;
                     if (s->fs == 0)
                         goto illegal_insn;
                     imm = get_field1(insn, 12, 5, 5) |
@@ -825,7 +825,7 @@ static uint32_t ccc = 0;
 #endif
             case 2: /* c.lwsp */
                 {
-                    uint32_t rval;
+                    uint32_t rval = 0;
                     imm = get_field1(insn, 12, 5, 5) |
                         (rs2 & (7 << 2)) |
                         get_field1(insn, 2, 6, 7);
@@ -839,7 +839,7 @@ static uint32_t ccc = 0;
 #if XLEN >= 64
             case 3: /* c.ldsp */
                 {
-                    uint64_t rval;
+                    uint64_t rval = 0;
                     imm = get_field1(insn, 12, 5, 5) |
                         (rs2 & (3 << 3)) |
                         get_field1(insn, 2, 6, 8);
@@ -853,7 +853,7 @@ static uint32_t ccc = 0;
 #elif FLEN >= 32
             case 3: /* c.flwsp */
                 {
-                    uint32_t rval;
+                    uint32_t rval = 0;
                     if (s->fs == 0)
                         goto illegal_insn;
                     imm = get_field1(insn, 12, 5, 5) |
@@ -1009,7 +1009,7 @@ static uint32_t ccc = 0;
             switch(funct3) {
             case 0: /* lb */
                 {
-                    uint8_t rval;
+                    uint8_t rval = 0;
                     if (target_read_u8(s, &rval, addr))
                         goto mmu_exception;
                     val = (int8_t)rval;
@@ -1017,7 +1017,7 @@ static uint32_t ccc = 0;
                 break;
             case 1: /* lh */
                 {
-                    uint16_t rval;
+                    uint16_t rval = 0;
                     if (target_read_u16(s, &rval, addr))
                         goto mmu_exception;
                     val = (int16_t)rval;
@@ -1025,7 +1025,7 @@ static uint32_t ccc = 0;
                 break;
             case 2: /* lw */
                 {
-                    uint32_t rval;
+                    uint32_t rval = 0;
                     if (target_read_u32(s, &rval, addr))
                         goto mmu_exception;
                     val = (int32_t)rval;
@@ -1033,7 +1033,7 @@ static uint32_t ccc = 0;
                 break;
             case 4: /* lbu */
                 {
-                    uint8_t rval;
+                    uint8_t rval = 0;
                     if (target_read_u8(s, &rval, addr))
                         goto mmu_exception;
                     val = rval;
@@ -1041,7 +1041,7 @@ static uint32_t ccc = 0;
                 break;
             case 5: /* lhu */
                 {
-                    uint16_t rval;
+                    uint16_t rval = 0;
                     if (target_read_u16(s, &rval, addr))
                         goto mmu_exception;
                     val = rval;
@@ -1050,7 +1050,7 @@ static uint32_t ccc = 0;
 #if XLEN >= 64
             case 3: /* ld */
                 {
-                    uint64_t rval;
+                    uint64_t rval = 0;
                     if (target_read_u64(s, &rval, addr))
                         goto mmu_exception;
                     val = (int64_t)rval;
@@ -1058,7 +1058,7 @@ static uint32_t ccc = 0;
                 break;
             case 6: /* lwu */
                 {
-                    uint32_t rval;
+                    uint32_t rval = 0;
                     if (target_read_u32(s, &rval, addr))
                         goto mmu_exception;
                     val = rval;
@@ -1068,7 +1068,7 @@ static uint32_t ccc = 0;
 #if XLEN >= 128
             case 7: /* ldu */
                 {
-                    uint64_t rval;
+                    uint64_t rval = 0;
                     if (target_read_u64(s, &rval, addr))
                         goto mmu_exception;
                     val = rval;
@@ -1560,7 +1560,7 @@ static uint32_t ccc = 0;
             funct3 = (insn >> 12) & 7;
 #define OP_A(size)                                                      \
             {                                                           \
-                uint ## size ##_t rval;                                 \
+                uint ## size ##_t rval = 0;                             \
                                                                         \
                 addr = s->reg[rs1];                                     \
                 funct3 = insn >> 27;                                    \
@@ -1668,7 +1668,7 @@ static uint32_t ccc = 0;
             switch(funct3) {
             case 2: /* flw */
                 {
-                    uint32_t rval;
+                    uint32_t rval = 0;
                     if (target_read_u32(s, &rval, addr))
                         goto mmu_exception;
                     s->fp_reg[rd] = rval | F32_HIGH;
@@ -1677,7 +1677,7 @@ static uint32_t ccc = 0;
 #if FLEN >= 64
             case 3: /* fld */
                 {
-                    uint64_t rval;
+                    uint64_t rval = 0;
                     if (target_read_u64(s, &rval, addr))
                         goto mmu_exception;
                     s->fp_reg[rd] = rval | F64_HIGH;
@@ -1687,7 +1687,7 @@ static uint32_t ccc = 0;
 #if FLEN >= 128
             case 4: /* flq */
                 {
-                    uint128_t rval;
+                    uint128_t rval = 0;
                     if (target_read_u128(s, &rval, addr))
                         goto mmu_exception;
                     s->fp_reg[rd] = rval;

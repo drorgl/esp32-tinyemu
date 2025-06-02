@@ -63,7 +63,7 @@ void test_add_and_get_least_recently_used(){
 
     lru_cache_add(cache, "key", "value");
 
-    char * value = lru_cache_get_least_recently_used(cache);
+    char * value = lru_cache_get_least_recently_used(cache,-1);
     TEST_ASSERT_EQUAL_STRING("value", value);
 
     lru_cache_free(cache);
@@ -113,7 +113,7 @@ void test_add_and_get_least_recently_used_with_2_keys(){
     lru_cache_add(cache, "key1", "value1");
     lru_cache_add(cache, "key2", "value2");
 
-    char * value = lru_cache_get_least_recently_used(cache);
+    char * value = lru_cache_get_least_recently_used(cache,-1);
     TEST_ASSERT_EQUAL_STRING("value1", value);
 
     lru_cache_free(cache);
@@ -126,12 +126,12 @@ void test_add_and_get_least_recently_used_with_3_keys(){
     lru_cache_add(cache, "key2", "value2");
     lru_cache_add(cache, "key3", "value3");
 
-    char * value = lru_cache_get_least_recently_used(cache);
+    char * value = lru_cache_get_least_recently_used(cache,-1);
     TEST_ASSERT_EQUAL_STRING("value1", value);
 
     lru_cache_remove(cache, "key1");
 
-    value = lru_cache_get_least_recently_used(cache);
+    value = lru_cache_get_least_recently_used(cache,-1);
     TEST_ASSERT_EQUAL_STRING("value2", value);
 
     lru_cache_free(cache);
@@ -145,7 +145,7 @@ void test_add_and_get_then_check_least_recently_used_is_the_unused_key(){
 
     lru_cache_get(cache,"key2");
 
-    char * value = lru_cache_get_least_recently_used(cache);
+    char * value = lru_cache_get_least_recently_used(cache,-1);
     TEST_ASSERT_EQUAL_STRING("value1", value);
 
     lru_cache_free(cache);
@@ -164,7 +164,7 @@ void test_add_and_sync_with_2_keys(){
     flush_value = NULL;
     flush_context = NULL;
 
-    char * value = lru_cache_get_least_recently_used(cache);
+    char * value = lru_cache_get_least_recently_used(cache,-1);
     TEST_ASSERT_EQUAL_STRING("kv1", value);
     lru_cache_remove(cache,value );
 

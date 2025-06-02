@@ -297,7 +297,7 @@ static void skip_spaces(const char **pp)
     const char *p;
     p = *pp;
     for(;;) {
-        if (isspace(*p)) {
+        if (isspace((const unsigned char)*p)) {
             p++;
         } else if (p[0] == '/' && p[1] == '/') {
             p += 2;
@@ -330,7 +330,7 @@ static int parse_ident(char *buf, int buf_size, const char **pp)
     p = *pp;
     q = buf;
     *q++ = *p++; /* first char is already tested */
-    while (is_ident_first(*p) || isdigit(*p)) {
+    while (is_ident_first(*p) || isdigit((const unsigned char)*p)) {
         if ((q - buf) >= buf_size - 1)
             return -1;
         *q++ = *p++;
@@ -351,7 +351,7 @@ JSONValue json_parse_value2(const char **pp)
     if (*p == '\0') {
         return json_error_new("unexpected end of file");
     }
-    if (isdigit(*p)) {
+    if (isdigit((unsigned char) *p)) {
         val = json_int32_new(strtol(p, (char **)&p, 0));
     } else if (*p == '"') {
         val = parse_string(&p);

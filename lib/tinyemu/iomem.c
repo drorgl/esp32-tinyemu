@@ -124,21 +124,23 @@ static PhysMemoryRange *default_register_ram(PhysMemoryMap *s, uint64_t addr,
     uint32_t vmm_pages = 0;
 
     if (size< 1024 * 1024) {
-        vmm_pages = (128 * 1024) / (16*1024);
+        vmm_pages = (128 * 1024) / (8*1024);
     } else {
-        vmm_pages = (2 * 1024 * 1024) / (16 * 1024);
+        vmm_pages = (2 * 1024 * 1024) / (8 * 1024);
     }
 
     //testing new indexer
-    vmm_pages = 400;
-    uint32_t vmm_page_size = 1024 * 8;
+    vmm_pages = 800;
+    uint32_t vmm_page_size = 1024 * 4;
 
-    size_t maxiumum_blocks = 500;
+    size_t maxiumum_blocks = 950;
     if (addr == 0){
-        maxiumum_blocks = 12; //bios doesn't need more than 128k
-        vmm_pages = 10;
+        maxiumum_blocks = 1; //bios doesn't need more than 128k
+        vmm_pages = 15;
     }
 
+    printf("Allocating VMM with %s, size: %" PRIu64 ", page size: %" PRIu32 ", pages: %" PRIu32 ", max blocks: %zu, estimated memory %" PRIu32 ", himem %" PRIu32 "\r\n",
+           fullpath, size, vmm_page_size, vmm_pages, maxiumum_blocks, vmm_pages * vmm_page_size, maxiumum_blocks * vmm_page_size);
     pr->vmm = vmm_create(fullpath, size, vmm_page_size, vmm_pages, maxiumum_blocks);
     assert(pr->vmm && "VMM not created");
 
@@ -286,7 +288,7 @@ uint8_t *phys_mem_get_ram_ptr(PhysMemoryMap *map, uint64_t paddr, BOOL is_rw)
     offset = paddr - pr->addr;
     if (is_rw)
         phys_mem_set_dirty_bit(pr, offset);
-    uint64_t ptr = pr->phys_mem + /*(uintptr_t)*/offset;
+    uint64_t ptr = (uint64_t)(pr->phys_mem + /*(uintptr_t)*/offset);
     return (uint8_t*)ptr;
 }
 

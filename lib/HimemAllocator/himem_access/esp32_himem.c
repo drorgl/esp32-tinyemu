@@ -142,9 +142,9 @@ static void map_superblock(himem_allocator_t * allocator, size_t superblock_id)
         // check if currently mapped is the block we need, if not, remap the new block
         if (superblock_id != allocator->current_superblock_id)
         {
-            ESP_LOGD(TAG, "unmapping %d as %d", allocator->current_superblock_id, allocator->current_superblock_id * ESP_HIMEM_BLKSZ);
+            // ESP_LOGD(TAG, "unmapping %d as %d", allocator->current_superblock_id, allocator->current_superblock_id * ESP_HIMEM_BLKSZ);
             ESP_ERROR_CHECK(esp_himem_unmap(allocator->rh, allocator->ptr, ESP_HIMEM_BLKSZ));
-            ESP_LOGD(TAG, "mapping %d as %d", superblock_id, superblock_id * ESP_HIMEM_BLKSZ);
+            // ESP_LOGD(TAG, "mapping %d as %d", superblock_id, superblock_id * ESP_HIMEM_BLKSZ);
             ESP_ERROR_CHECK(esp_himem_map(allocator->mh, allocator->rh, superblock_id * ESP_HIMEM_BLKSZ, 0, ESP_HIMEM_BLKSZ, 0, (void **)&allocator->ptr));
             allocator->current_superblock_id = superblock_id;
             allocator->mapped = true;
@@ -182,7 +182,7 @@ static size_t esp32_himem_read(himem_allocator_t * allocator,const uint16_t bloc
     uint32_t offset_in_superblock = (block_id * allocator->_block_size) % ESP_HIMEM_BLKSZ;
 
     map_superblock(allocator,superblock_id);
-    ESP_LOGD(TAG, "reading offset %d in 0x%x %d bytes, ptr 0x%x", offset_in_superblock, (uintptr_t)allocator->ptr + offset_in_superblock, len, (uintptr_t)allocator->ptr);
+    // ESP_LOGD(TAG, "reading offset %d in 0x%x %d bytes, ptr 0x%x", offset_in_superblock, (uintptr_t)allocator->ptr + offset_in_superblock, len, (uintptr_t)allocator->ptr);
     memcpy(buf, allocator->ptr + offset_in_superblock, len);
     // myMemCpy(buf, ptr + offset_in_superblock, len);
     return len;
@@ -199,7 +199,7 @@ static size_t esp32_himem_write(himem_allocator_t * allocator,const uint16_t blo
     uint32_t offset_in_superblock = (block_id * allocator->_block_size) % ESP_HIMEM_BLKSZ;
 
     map_superblock(allocator,superblock_id);
-    ESP_LOGD(TAG, "writing offset %d 0x%x %d bytes, ptr 0x%x", offset_in_superblock, (uintptr_t)allocator->ptr + offset_in_superblock, len, (uintptr_t)allocator->ptr);
+    // ESP_LOGD(TAG, "writing offset %d 0x%x %d bytes, ptr 0x%x", offset_in_superblock, (uintptr_t)allocator->ptr + offset_in_superblock, len, (uintptr_t)allocator->ptr);
     memcpy(allocator->ptr + offset_in_superblock, buf, len);
     return len;
 }
