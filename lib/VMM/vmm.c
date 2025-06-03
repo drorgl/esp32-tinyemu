@@ -268,6 +268,10 @@ void on_page_flush(void *key, void *value, void *context)
 {
     VMM_t *vmm = (VMM_t *)context;
     vmTable_t *page = value;
+
+    const uint8_t fastpage_slot = page->page_number % VMM_FASTPAGE_LENGTH;
+    vmm->last_fastpage[fastpage_slot].page_number = -1;
+
     uint8_t page_write_dirty = vmm_storage_get_page_write_dirty(vmm->vmm_storage,page->page_number);
     uint8_t page_dirty = vmm_storage_get_page_dirty(vmm->vmm_storage,page->page_number);
     log_debug("page flush for page %d, dirty %x", page->page_number, page_write_dirty);
@@ -319,9 +323,12 @@ VMM_t *vmm_create(const char *pagefile, size_t maximum_size, size_t page_size, s
     vmm->last_page_number = -1;
     vmm->empty_page = (uint8_t *)malloc(sizeof(uint8_t) * vmm->page_size);
     memset(vmm->empty_page, 0, vmm->page_size);
-    vmm->last_fastpage.page_number = -1;
-    vmm->last_fastpage.page_start = 0x00;
-    vmm->last_fastpage.page_end = 0x00;
+    for (size_t i = 0; i < VMM_FASTPAGE_LENGTH; i++)
+    {
+        vmm->last_fastpage[i].page_number = -1;
+        vmm->last_fastpage[i].page_start = 0x00;
+        vmm->last_fastpage[i].page_end = 0x00;
+    }
 
     
 #ifdef VMM_DEBUG
@@ -440,25 +447,27 @@ VMM_fastpage_t * vmm_write_preload_fastpage(VMM_t *vmm, size_t addr){
     // return &vmm->last_fastpage;
 
     const size_t page_number = get_page_number_by_address(vmm, addr);
-    if (page_number == vmm->last_fastpage.page_number && vmm->last_fastpage.write_enabled){
+    const uint8_t fastpage_slot = page_number % VMM_FASTPAGE_LENGTH;
+    //TODO: possible bug if the page was unloaded but the fastpage is still used
+    if (page_number == vmm->last_fastpage[fastpage_slot].page_number && vmm->last_fastpage[fastpage_slot].write_enabled){
         // printf("using last fastpage %d\r\n", page_number);
-        return &vmm->last_fastpage;
+        return &vmm->last_fastpage[fastpage_slot];
     }
 
     const size_t page_address = page_number * vmm->page_size;
     // // const size_t max_length = vmm->page_size 
     
-    vmm->last_fastpage.page_number = page_number;
-    vmm->last_fastpage.page_start = page_address;
-    vmm->last_fastpage.page_end = page_address + vmm->page_size;
-    vmm->last_fastpage.write_enabled = true;
+    vmm->last_fastpage[fastpage_slot].page_number = page_number;
+    vmm->last_fastpage[fastpage_slot].page_start = page_address;
+    vmm->last_fastpage[fastpage_slot].page_end = page_address + vmm->page_size;
+    vmm->last_fastpage[fastpage_slot].write_enabled = true;
 
     vmTable_t *page = get_page(vmm, addr);
-    vmm->last_fastpage.buffer = page->page_cache;
+    vmm->last_fastpage[fastpage_slot].buffer = page->page_cache;
     vmm_storage_set_page_dirty(vmm->vmm_storage, page->page_number, 0, vmm->page_size);
 
 
-    return &vmm->last_fastpage;
+    return &vmm->last_fastpage[fastpage_slot];
 }
 
 
@@ -469,28 +478,31 @@ VMM_fastpage_t * vmm_read_preload_fastpage(VMM_t *vmm, size_t addr){
     // return &vmm->last_fastpage;
 
     const size_t page_number = get_page_number_by_address(vmm, addr);
-    if (page_number == vmm->last_fastpage.page_number){
+    const uint8_t fastpage_slot = page_number % VMM_FASTPAGE_LENGTH;
+
+    //TODO: possible bug if the page was unloaded but the fastpage is still used
+    if (page_number == vmm->last_fastpage[fastpage_slot].page_number){
         // printf("using last fastpage %d\r\n", page_number);
-        return &vmm->last_fastpage;
+        return &vmm->last_fastpage[fastpage_slot];
     }
 
     const size_t page_address = page_number * vmm->page_size;
     // // const size_t max_length = vmm->page_size 
     
-    vmm->last_fastpage.page_number = page_number;
-    vmm->last_fastpage.page_start = page_address;
-    vmm->last_fastpage.page_end = page_address + vmm->page_size;
-    vmm->last_fastpage.write_enabled = false;
+    vmm->last_fastpage[fastpage_slot].page_number = page_number;
+    vmm->last_fastpage[fastpage_slot].page_start = page_address;
+    vmm->last_fastpage[fastpage_slot].page_end = page_address + vmm->page_size;
+    vmm->last_fastpage[fastpage_slot].write_enabled = false;
     
     if (vmm_storage_get_page_dirty(vmm->vmm_storage,page_number) == 0){
         // printf("skipping read of page %d, empty (%zu)\r\n", page_number, vmm->page_size);
-        vmm->last_fastpage.buffer = vmm->empty_page;
+        vmm->last_fastpage[fastpage_slot].buffer = vmm->empty_page;
     }else{
         vmTable_t *page = get_page(vmm, addr);
-        vmm->last_fastpage.buffer = page->page_cache;
+        vmm->last_fastpage[fastpage_slot].buffer = page->page_cache;
     }
 
-    return &vmm->last_fastpage;
+    return &vmm->last_fastpage[fastpage_slot];
 }
 
 static inline size_t vmm_write_internal(VMM_t *vmm, size_t addr, void *source, size_t len)
